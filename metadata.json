@@ -1,0 +1,6 @@
+{
+  "name": "StreamFlow Browser",
+  "description": "A lightweight live streaming browser optimized for low bandwidth, focus mode, and custom cropping.",
+  "requestFramePermissions": ["display-capture", "screen-wake-lock", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
