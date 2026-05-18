@@ -141,7 +141,16 @@ export default function App() {
   // Recording Logic
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      // @ts-ignore - Check for multiple potential locations of getDisplayMedia
+      const mediaDevices = navigator.mediaDevices as any;
+      const getDisplayMedia = mediaDevices?.getDisplayMedia?.bind(mediaDevices) || (navigator as any)?.getDisplayMedia?.bind(navigator);
+
+      if (!getDisplayMedia) {
+        alert("Screen recording is not supported in this browser or environment. Please use a desktop browser like Chrome or Edge.");
+        return;
+      }
+
+      const stream = await getDisplayMedia({ video: true, audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       recordedChunksRef.current = [];
 
@@ -156,6 +165,7 @@ export default function App() {
         a.href = url;
         a.download = `stream-record-${Date.now()}.webm`;
         a.click();
+        stream.getTracks().forEach(t => t.stop());
         setState(p => ({ ...p, isRecording: false }));
       };
 
@@ -163,6 +173,7 @@ export default function App() {
       setState(p => ({ ...p, isRecording: true }));
     } catch (err) {
       console.error("Recording error:", err);
+      setState(p => ({ ...p, isRecording: false }));
     }
   };
 
@@ -192,7 +203,7 @@ export default function App() {
   };
 
   const addTab = () => {
-    const newId = (state.tabs.length + 1).toString();
+    const newId = Date.now().toString();
     setState(p => ({
       ...p,
       tabs: [...p.tabs, { id: newId, url: 'https://www.google.com', title: 'New Tab', icon: '+' }],
@@ -203,12 +214,12 @@ export default function App() {
 
   const closeTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (state.tabs.length === 1) return;
+    if (state.tabs.length <= 1) return;
     const newTabs = state.tabs.filter(t => t.id !== id);
     setState(p => ({
       ...p,
       tabs: newTabs,
-      activeTabId: p.activeTabId === id ? newTabs[0].id : p.activeTabId
+      activeTabId: p.activeTabId === id ? (newTabs[0]?.id || '') : p.activeTabId
     }));
   };
 
@@ -224,11 +235,41 @@ export default function App() {
 
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
 
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  const onMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!state.isCropping || state.isLocked) return;
+    setIsDragging(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    dragStart.current = { x: clientX - state.cropOffsetX, y: clientY - state.cropOffsetY };
+  };
+
+  const onMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDragging) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    setState(p => ({
+      ...p,
+      cropOffsetX: clientX - dragStart.current.x,
+      cropOffsetY: clientY - dragStart.current.y
+    }));
+  };
+
+  const onMouseUp = () => setIsDragging(false);
+
   return (
     <div 
       ref={containerRef}
       className={`flex flex-col w-full h-screen bg-brand-bg text-slate-200 overflow-hidden font-sans transition-all duration-500 ${state.isLowRam ? 'grayscale brightness-90' : ''}`}
       id="main-app"
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      onTouchMove={onMouseMove}
+      onTouchEnd={onMouseUp}
     >
       {/* --- Splash Screen --- */}
       <AnimatePresence>
@@ -355,7 +396,11 @@ export default function App() {
         </AnimatePresence>
 
         {/* --- Main Viewport (WebView Container) --- */}
-        <main className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+        <main 
+          className={`flex-1 relative bg-black flex items-center justify-center overflow-hidden transition-all ${state.isCropping ? 'cursor-move' : ''}`}
+          onMouseDown={onMouseDown}
+          onTouchStart={onMouseDown}
+        >
           
           {/* Reconnect Overlay */}
           {!isOnline && (
@@ -623,13 +668,14 @@ export default function App() {
       {/* --- Cropping Control Panel --- */}
       <AnimatePresence>
         {state.isCropping && (
-          <motion.div 
-            initial={{ y: 100 }}
-            animate={{ y: 0 }}
-            exit={{ y: 100 }}
-            className="absolute left-1/2 -translate-x-1/2 bottom-20 z-[100] flex flex-col gap-2 bg-brand-surface/90 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl"
-          >
-            <div className="flex gap-2">
+            <motion.div 
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              className="absolute left-1/2 -translate-x-1/2 bottom-20 z-[100] flex flex-col gap-2 bg-brand-surface/90 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl items-center"
+            >
+              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest mb-1">Tip: Drag the screen to position</p>
+              <div className="flex gap-2">
               <CropGridButton id="crop-up" onClick={() => adjustCrop('y', 50)} icon={<ArrowLeft className="rotate-90 w-4 h-4" />} />
               <CropGridButton id="crop-left" onClick={() => adjustCrop('x', 50)} icon={<ArrowLeft className="w-4 h-4" />} />
               <CropGridButton id="crop-right" onClick={() => adjustCrop('x', -50)} icon={<ArrowRight className="w-4 h-4" />} />
