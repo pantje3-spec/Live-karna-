@@ -23,6 +23,7 @@ import {
   Sun,
   Layout,
   Plus,
+  Minus,
   X,
   MessageSquare,
   Circle,
@@ -88,8 +89,16 @@ export default function App() {
   const [speed, setSpeed] = useState<string>('1.8');
   const [showControls, setShowControls] = useState(true);
   const [showUrlBar, setShowUrlBar] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) setIsSidebarOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -682,7 +691,7 @@ export default function App() {
               <CropGridButton id="crop-down" onClick={() => adjustCrop('y', -50)} icon={<ArrowRight className="rotate-90 w-4 h-4" />} />
               <div className="w-px h-10 bg-white/5 mx-2" />
               <CropGridButton id="crop-in" onClick={() => adjustCrop('scale', 0.1)} icon={<Plus className="w-4 h-4 text-blue-400" />} />
-              <CropGridButton id="crop-out" onClick={() => adjustCrop('scale', -0.1)} icon={<Minimize className="w-4 h-4 text-blue-400" />} />
+              <CropGridButton id="crop-out" onClick={() => adjustCrop('scale', -0.1)} icon={<Minus className="w-4 h-4 text-blue-400" />} />
               <CropGridButton id="crop-reset" onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0 }))} icon={<RotateCw className="w-4 h-4 text-slate-400" />} />
             </div>
           </motion.div>
