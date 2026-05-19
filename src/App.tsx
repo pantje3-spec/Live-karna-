@@ -25,7 +25,8 @@ import {
   Plus,
   Minus,
   X,
-  MessageSquare,
+  User,
+  Camera,
   Circle,
   Video,
   Download,
@@ -52,13 +53,16 @@ interface StreamState {
   isFullscreen: boolean;
   isLowData: boolean;
   isLowRam: boolean;
-  isRecording: boolean;
-  isChatOpen: boolean;
   cropScale: number;
   cropOffsetX: number;
   cropOffsetY: number;
   isCropping: boolean;
   isSplashed: boolean;
+  // Face Overlay
+  isCamVisible: boolean;
+  camScale: number;
+  camX: number;
+  camY: number;
 }
 
 const DEFAULT_TABS: Tab[] = [
@@ -77,13 +81,15 @@ export default function App() {
     isFullscreen: false,
     isLowData: false,
     isLowRam: false,
-    isRecording: false,
-    isChatOpen: false,
     cropScale: 1,
     cropOffsetX: 0,
     cropOffsetY: 0,
     isCropping: false,
     isSplashed: true,
+    isCamVisible: false,
+    camScale: 1,
+    camX: 20,
+    camY: 20
   });
 
   const [speed, setSpeed] = useState<string>('1.8');
@@ -102,11 +108,23 @@ export default function App() {
   
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const wakeLockRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // --- Effects ---
+  
+  // Camera Stream
+  useEffect(() => {
+    if (state.isCamVisible) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          if (videoRef.current) videoRef.current.srcObject = stream;
+        })
+        .catch(err => console.error("Camera error:", err));
+    } else {
+      const stream = videoRef.current?.srcObject as MediaStream;
+      stream?.getTracks().forEach(track => track.stop());
+    }
+  }, [state.isCamVisible]);
   
   // Professional Splash Screen Exit
   useEffect(() => {
@@ -180,8 +198,12 @@ export default function App() {
 
       mediaRecorderRef.current.start();
       setState(p => ({ ...p, isRecording: true }));
-    } catch (err) {
-      console.error("Recording error:", err);
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        console.log("Recording cancelled by user");
+      } else {
+        console.error("Recording error:", err);
+      }
       setState(p => ({ ...p, isRecording: false }));
     }
   };
@@ -245,6 +267,7 @@ export default function App() {
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
 
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingCam, setIsDraggingCam] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
   const onMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
@@ -255,19 +278,37 @@ export default function App() {
     dragStart.current = { x: clientX - state.cropOffsetX, y: clientY - state.cropOffsetY };
   };
 
-  const onMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDragging) return;
+  const onMouseDownCam = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    setIsDraggingCam(true);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
-    setState(p => ({
-      ...p,
-      cropOffsetX: clientX - dragStart.current.x,
-      cropOffsetY: clientY - dragStart.current.y
-    }));
+    dragStart.current = { x: clientX - state.camX, y: clientY - state.camY };
   };
 
-  const onMouseUp = () => setIsDragging(false);
+  const onMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    if (isDragging) {
+      setState(p => ({
+        ...p,
+        cropOffsetX: clientX - dragStart.current.x,
+        cropOffsetY: clientY - dragStart.current.y
+      }));
+    } else if (isDraggingCam) {
+      setState(p => ({
+        ...p,
+        camX: clientX - dragStart.current.x,
+        camY: clientY - dragStart.current.y
+      }));
+    }
+  };
+
+  const onMouseUp = () => {
+    setIsDragging(false);
+    setIsDraggingCam(false);
+  };
 
   return (
     <div 
@@ -384,20 +425,14 @@ export default function App() {
               </div>
 
               <div className="mt-auto">
-                <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Video className="w-4 h-4 text-blue-500" />
-                    <span className="text-[10px] font-bold uppercase text-blue-400">Recording</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 leading-tight mb-2">Capture your stream in 1080p WebM format.</p>
-                  <button 
-                    onClick={state.isRecording ? stopRecording : startRecording}
-                    className={`w-full py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                      state.isRecording ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-600 text-white'
-                    }`}
-                  >
-                    {state.isRecording ? 'Stop Recording' : 'Start Capture'}
-                  </button>
+                <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-3 text-center">
+                   <p className="text-[10px] text-blue-400 font-bold uppercase mb-2">Setup Status</p>
+                   <div className="flex justify-center gap-1 mb-2">
+                     <div className={`w-2 h-2 rounded-full ${state.isCropping ? 'bg-blue-500' : 'bg-slate-700'}`} />
+                     <div className={`w-2 h-2 rounded-full ${state.isCamVisible ? 'bg-emerald-500' : 'bg-slate-700'}`} />
+                     <div className={`w-2 h-2 rounded-full ${state.isLocked ? 'bg-amber-500' : 'bg-slate-700'}`} />
+                   </div>
+                   <p className="text-[9px] text-slate-500 leading-tight">Your layout is ready for external capture software.</p>
                 </div>
               </div>
             </motion.aside>
@@ -472,38 +507,36 @@ export default function App() {
             <div className="absolute inset-0 z-[70] cursor-not-allowed bg-transparent" />
           )}
 
-          {/* Picture in Picture Float (Emulated) */}
+          {/* Camera Overlay */}
           <AnimatePresence>
-            {state.isChatOpen && (
+            {state.isCamVisible && (
               <motion.div 
-                initial={{ opacity: 0, x: 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 100 }}
-                className="absolute right-0 top-0 bottom-0 w-80 bg-brand-surface/80 backdrop-blur-2xl border-l border-white/5 z-[80] shadow-2xl flex flex-col"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="absolute z-[100] cursor-move bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl"
+                onMouseDown={onMouseDownCam}
+                onTouchStart={onMouseDownCam}
+                style={{
+                  width: `${150 * state.camScale}px`,
+                  height: `${150 * state.camScale}px`,
+                  left: `${state.camX}px`, // Changed to pixel coordinates for absolute positioning
+                  top: `${state.camY}px`,
+                  touchAction: 'none'
+                }}
               >
-                <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs font-bold uppercase tracking-widest font-mono">Live Stream Chat</span>
+                <video 
+                  ref={videoRef}
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+                {!state.isLocked && (
+                  <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                    <Camera className="w-6 h-6 text-white drop-shadow-lg" />
                   </div>
-                  <button onClick={() => setState(p => ({ ...p, isChatOpen: false }))} className="text-slate-500 hover:text-white">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                  {/* Chat placeholder messages */}
-                  <ChatMessage user="StreamBot" text="Welcome to StreamFlow Pro live chat!" color="text-emerald-400" />
-                  <ChatMessage user="Fan101" text="Great quality on this stream!" />
-                  <ChatMessage user="User_99" text="Does this app support 4K?" />
-                  <ChatMessage user="StreamBot" text="Yes, depending on your link!" color="text-emerald-400" />
-                </div>
-                <div className="p-4 bg-white/5">
-                  <input 
-                    type="text" 
-                    placeholder="Send a message..." 
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-blue-500/50"
-                  />
-                </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -530,13 +563,7 @@ export default function App() {
         </main>
 
         {/* --- Floating UI Info Overlays --- */}
-        <div className="absolute top-16 left-4 lg:left-[260px] z-[90] flex flex-col gap-2 pointer-events-none transition-all duration-500">
-           {state.isRecording && (
-             <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-red-500/50 shadow-xl self-start">
-               <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-               <span className="text-[10px] font-bold text-white uppercase tracking-widest">Recording Stream</span>
-             </div>
-           )}
+        <div className="absolute top-4 left-4 lg:left-[260px] z-[90] flex flex-col gap-2 pointer-events-none transition-all duration-500">
            <div className="flex items-center gap-3 bg-brand-surface/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 text-xs shadow-xl self-start pointer-events-auto">
              <div className="flex items-center gap-1.5 text-emerald-400">
                <Wifi className="w-3.5 h-3.5" />
@@ -645,23 +672,24 @@ export default function App() {
             />
             <FooterButton 
               icon={<Crop className="w-5 h-5" />} 
-              label="Crop View" 
+              label="Fix Browser" 
               onClick={() => setState(p => ({ ...p, isCropping: !p.isCropping }))}
               active={state.isCropping}
               variant="blue"
             />
             <FooterButton 
-              icon={<MessageSquare className="w-5 h-5" />} 
-              label="Live Chat" 
-              onClick={() => setState(p => ({ ...p, isChatOpen: !p.isChatOpen }))}
-              active={state.isChatOpen}
+              icon={<User className="w-5 h-5" />} 
+              label="Face Overlay" 
+              onClick={() => setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
+              active={state.isCamVisible}
+              variant={state.isCamVisible ? 'blue' : 'default'}
             />
             <FooterButton 
-              icon={<Video className="w-5 h-5" />} 
-              label={state.isRecording ? "Stop" : "Record"} 
-              onClick={state.isRecording ? stopRecording : startRecording}
-              active={state.isRecording}
-              variant={state.isRecording ? 'red' : 'default'}
+              icon={state.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />} 
+              label={state.isLocked ? "Locked" : "Lock Setup"} 
+              onClick={() => setState(p => ({ ...p, isLocked: !p.isLocked }))}
+              active={state.isLocked}
+              variant={state.isLocked ? 'red' : 'default'}
             />
             <div className="w-px h-8 bg-white/5 mx-2" />
             <FooterButton 
@@ -692,8 +720,15 @@ export default function App() {
               <div className="w-px h-10 bg-white/5 mx-2" />
               <CropGridButton id="crop-in" onClick={() => adjustCrop('scale', 0.1)} icon={<Plus className="w-4 h-4 text-blue-400" />} />
               <CropGridButton id="crop-out" onClick={() => adjustCrop('scale', -0.1)} icon={<Minus className="w-4 h-4 text-blue-400" />} />
-              <CropGridButton id="crop-reset" onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0 }))} icon={<RotateCw className="w-4 h-4 text-slate-400" />} />
+              <CropGridButton id="crop-reset" onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0, camScale: 1, camX: 20, camY: 20 }))} icon={<RotateCw className="w-4 h-4 text-slate-400" />} />
             </div>
+            {state.isCamVisible && (
+              <div className="flex gap-2 justify-center mt-2 border-t border-white/5 pt-2">
+                <p className="text-[9px] text-slate-500 uppercase font-bold mr-2">Face Size:</p>
+                <button onClick={() => setState(p => ({ ...p, camScale: Math.max(0.5, p.camScale - 0.1) }))} className="p-1 hover:bg-white/5 rounded"><Minus className="w-3 h-3" /></button>
+                <button onClick={() => setState(p => ({ ...p, camScale: Math.min(3, p.camScale + 0.1) }))} className="p-1 hover:bg-white/5 rounded"><Plus className="w-3 h-3" /></button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
