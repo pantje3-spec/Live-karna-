@@ -254,16 +254,6 @@ export default function App() {
     }));
   };
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen();
-      setState(prev => ({ ...prev, isFullscreen: true }));
-    } else {
-      document.exitFullscreen();
-      setState(prev => ({ ...prev, isFullscreen: false }));
-    }
-  };
-
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
 
   const [isDragging, setIsDragging] = useState(false);
@@ -310,119 +300,139 @@ export default function App() {
     setIsDraggingCam(false);
   };
 
+  // Toggle for Clean View (Capture Mode)
+  const toggleFullscreen = () => {
+    setState(p => ({ ...p, isFullscreen: !p.isFullscreen }));
+  };
+
   return (
     <div 
-      ref={containerRef}
-      className={`flex flex-col w-full h-screen bg-brand-bg text-slate-200 overflow-hidden font-sans transition-all duration-500 ${state.isLowRam ? 'grayscale brightness-90' : ''}`}
-      id="main-app"
+      className={`fixed inset-0 bg-[#0A0B0D] text-slate-200 font-sans select-none overflow-hidden flex flex-col ${state.isLocked ? 'cursor-default' : ''}`}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
       onTouchMove={onMouseMove}
       onTouchEnd={onMouseUp}
     >
-      {/* --- Splash Screen --- */}
-      <AnimatePresence>
-        {state.isSplashed && (
-          <motion.div 
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="fixed inset-0 z-[1000] bg-brand-bg flex flex-col items-center justify-center"
-          >
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center"
-            >
-              <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-6 rotate-12">
-                <Layout className="text-white w-10 h-10 -rotate-12" />
-              </div>
-              <h1 className="text-4xl font-bold tracking-tighter text-white mb-2">StreamFlow <span className="text-blue-500 font-light">PRO</span></h1>
-              <div className="flex gap-1 items-center">
-                <div className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce" />
-                <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em]">Initializing Engine v3.0</p>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- App Header with Tabs --- */}
-      <header className="h-12 bg-brand-surface border-b border-white/5 flex items-center px-4 gap-4 z-50 shrink-0">
-        <div className="flex items-center gap-2 mr-4">
-          <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
-            <Layout className="w-4 h-4 text-white" />
+      {/* --- Header: Hidden in Fullscreen --- */}
+      {!state.isFullscreen && (
+        <header className="h-14 border-b border-white/5 bg-brand-surface/40 backdrop-blur-md flex items-center px-4 justify-between z-[100] safe-top">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Layout className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold tracking-tight text-white leading-none">StreamFlow</h1>
+              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-1">Layout Fixer Pro</p>
+            </div>
           </div>
-          <span className="font-bold text-xs tracking-tight hidden md:block">StreamFlow</span>
-        </div>
 
-        <div className="flex-1 flex gap-1 overflow-x-auto no-scrollbar">
-          {state.tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setState(p => ({ ...p, activeTabId: tab.id }))}
-              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all min-w-[120px] max-w-[200px] border ${
-                state.activeTabId === tab.id 
-                  ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' 
-                  : 'border-transparent hover:bg-white/5 text-slate-500'
-              }`}
-            >
-              <Globe className="w-3 h-3" />
-              <span className="truncate flex-1 text-left">{tab.title}</span>
-              <X 
-                className="w-3 h-3 opacity-0 group-hover:opacity-100 hover:text-white" 
-                onClick={(e) => closeTab(tab.id, e)}
-              />
-            </button>
-          ))}
-          <button 
-            onClick={addTab}
-            className="p-1 px-2 hover:bg-white/5 rounded-lg transition-colors text-slate-500"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className={`flex items-center gap-1.5 text-[10px] font-bold ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
-            <Activity className="w-3 h-3" />
-            <span className="hidden sm:inline">{isOnline ? 'LIVE' : 'OFFLINE'}</span>
+          <div className="flex items-center gap-2">
+            <div className="bg-white/5 border border-white/10 rounded-full px-3 py-1 flex items-center gap-2">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Live Support</span>
+            </div>
           </div>
-          <button 
-            onClick={() => setShowUrlBar(true)}
-            className="p-2 hover:bg-white/5 rounded-full transition-colors text-slate-400"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
+      {/* --- Main Workspace --- */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* --- Side Navigation Sidebar (Left) --- */}
+        
+        {/* URL Bar Overlay (Modal) */}
         <AnimatePresence>
-          {!state.isFocusMode && isSidebarOpen && (
-            <motion.aside 
-              initial={{ x: -240 }}
-              animate={{ x: 0 }}
-              exit={{ x: -240 }}
-              className="w-60 bg-brand-sidebar border-r border-white/5 flex flex-col p-4 z-40 hidden lg:flex"
+          {showUrlBar && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
             >
-              <div className="mb-6">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4 px-2">Navigation</h3>
-                <nav className="flex flex-col gap-1">
-                  <NavBtn icon={<Monitor className="w-4 h-4" />} label="Live Streams" active />
-                  <NavBtn icon={<Cpu className="w-4 h-4" />} label="System Data" />
-                  <NavBtn icon={<Globe className="w-4 h-4" />} label="Web Browser" />
-                  <NavBtn icon={<Shield className="w-4 h-4" />} label="Safe Mode" />
-                </nav>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4 px-2">Shortcuts</h3>
-                <div className="flex flex-col gap-1">
-                  <NavBtn icon={<div className="w-4 h-4 bg-red-600 rounded-sm" />} label="YouTube Live" />
-                  <NavBtn icon={<div className="w-4 h-4 bg-blue-500 rounded-sm" />} label="Twitch Gaming" />
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="w-full max-w-lg bg-[#1A1B1E] border border-white/10 rounded-3xl p-6 shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                      <Globe className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Stream Configuration</h3>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Enter target website link</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowUrlBar(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                    <X className="w-5 h-5 text-slate-500" />
+                  </button>
                 </div>
-              </div>
+
+                <form onSubmit={handleNav} className="space-y-4">
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      className="w-full bg-black/40 border-2 border-white/5 rounded-2xl px-5 py-4 text-sm text-white outline-none focus:border-blue-500/50 transition-all font-medium placeholder:text-slate-600"
+                      placeholder="https://runbuzzcricket.com/..."
+                      autoFocus
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] bg-white/5 px-2 py-1 rounded-md text-slate-400 font-bold">HTTPS</div>
+                  </div>
+                  
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={addTab}
+                      className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all"
+                    >
+                      + New Tab
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-bold uppercase tracking-widest text-white transition-all shadow-xl shadow-blue-900/40"
+                    >
+                      Open Stream
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* --- Left Sidebar: Hidden in Fullscreen --- */}
+        {!state.isFullscreen && (
+          <motion.aside 
+            initial={false}
+            animate={{ width: isSidebarOpen ? 240 : 0, opacity: isSidebarOpen ? 1 : 0 }}
+            className="bg-brand-surface/20 border-r border-white/5 overflow-hidden flex flex-col z-[90]"
+          >
+            <div className="p-4 space-y-6 min-w-[240px]">
+              <section>
+                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Active Streams</h3>
+                <div className="space-y-1">
+                  {state.tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      disabled={state.isLocked}
+                      onClick={() => !state.isLocked && setState(p => ({ ...p, activeTabId: tab.id }))}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all group ${
+                        state.activeTabId === tab.id 
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                          : 'hover:bg-white/5 text-slate-400'
+                      } ${state.isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Monitor className="w-4 h-4" />
+                        <span className="text-xs font-medium truncate max-w-[120px]">{tab.title}</span>
+                      </div>
+                      {state.activeTabId === tab.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                    </button>
+                  ))}
+                </div>
+              </section>
 
               <div className="mt-auto">
                 <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-3 text-center">
@@ -435,76 +445,47 @@ export default function App() {
                    <p className="text-[9px] text-slate-500 leading-tight">Your layout is ready for external capture software.</p>
                 </div>
               </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-
-        {/* --- Main Viewport (WebView Container) --- */}
-        <main 
-          className={`flex-1 relative bg-black flex items-center justify-center overflow-hidden transition-all ${state.isCropping ? 'cursor-move' : ''}`}
-          onMouseDown={onMouseDown}
-          onTouchStart={onMouseDown}
-        >
-          
-          {/* Reconnect Overlay */}
-          {!isOnline && (
-            <div className="absolute inset-0 z-[99] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center">
-              <Wifi className="w-12 h-12 text-red-500 mb-4 animate-pulse" />
-              <h2 className="text-xl font-bold mb-2">Weak Internet Detected</h2>
-              <p className="text-sm text-slate-400 max-w-xs">StreamFlow is attempting to reconnect. Please check your internet connection.</p>
             </div>
-          )}
+          </motion.aside>
+        )}
 
-          {/* URL Bar Overlay */}
-          <AnimatePresence>
-            {showUrlBar && (
-              <motion.div 
-                initial={{ opacity: 0, y: -20, x: '-50%' }}
-                animate={{ opacity: 1, y: 0, x: '-50%' }}
-                exit={{ opacity: 0, y: -20, x: '-50%' }}
-                className="absolute top-6 left-1/2 w-[90%] max-w-[600px] bg-brand-surface/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2.5 flex items-center gap-3 z-[60] shadow-2xl shadow-black/80"
-              >
-                <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-slate-400">
-                  <Search className="w-4 h-4" />
-                </div>
-                <form onSubmit={handleNav} className="flex-1 flex gap-2">
-                  <input 
-                    type="text" 
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500 font-medium"
-                    placeholder="Enter streaming URL..."
-                    autoFocus
-                  />
-                  <button type="submit" className="px-4 bg-blue-600 rounded-xl text-white text-xs font-bold uppercase transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/40">Open</button>
-                </form>
-                <button onClick={() => setShowUrlBar(false)} className="p-2 text-slate-500 hover:text-white transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Iframe Viewport */}
+        {/* --- Browser Viewport --- */}
+        <main className="flex-1 relative bg-black overflow-hidden group">
+          {/* Action Overlay for Draggable Content */}
           <div 
-            className="absolute inset-0 z-10 flex items-center justify-center pointer-events-auto"
+            className={`absolute inset-0 z-50 ${state.isCropping && !state.isLocked ? 'cursor-move' : 'pointer-events-none'}`}
+            onMouseDown={state.isCropping && !state.isLocked ? onMouseDown : undefined}
+            onTouchStart={state.isCropping && !state.isLocked ? onMouseDown : undefined}
+          />
+          
+          <div 
+            className="absolute inset-0 transition-transform duration-300"
             style={{
               transform: `scale(${state.cropScale}) translate(${state.cropOffsetX}px, ${state.cropOffsetY}px)`,
-              transition: state.isCropping ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0, 0, 1)',
+              transformOrigin: 'center center'
             }}
           >
-            <iframe
+            <iframe 
               ref={iframeRef}
               src={activeTab.url}
-              className={`w-full h-full border-none pointer-events-${state.isLocked ? 'none' : 'auto'} ${state.isLowData ? 'contrast-125 saturate-50' : ''}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
+              className="w-full h-full border-none"
+              title="Stream View"
             />
           </div>
 
-          {/* Touch Lock Layer */}
+          {/* Interactive Blockers when Locked */}
           {state.isLocked && (
             <div className="absolute inset-0 z-[70] cursor-not-allowed bg-transparent" />
+          )}
+
+          {/* Fullscreen Exit Trigger */}
+          {state.isFullscreen && (
+            <button 
+              onClick={toggleFullscreen}
+              className="absolute top-4 right-4 z-[200] bg-black/60 hover:bg-black p-2 rounded-full border border-white/20 text-white/40 hover:text-white transition-all backdrop-blur-md"
+            >
+              <Minimize className="w-5 h-5" />
+            </button>
           )}
 
           {/* Camera Overlay */}
@@ -514,13 +495,13 @@ export default function App() {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="absolute z-[100] cursor-move bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl"
-                onMouseDown={onMouseDownCam}
-                onTouchStart={onMouseDownCam}
+                className={`absolute z-[100] bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
+                onMouseDown={!state.isLocked ? onMouseDownCam : undefined}
+                onTouchStart={!state.isLocked ? onMouseDownCam : undefined}
                 style={{
                   width: `${150 * state.camScale}px`,
                   height: `${150 * state.camScale}px`,
-                  left: `${state.camX}px`, // Changed to pixel coordinates for absolute positioning
+                  left: `${state.camX}px`, 
                   top: `${state.camY}px`,
                   touchAction: 'none'
                 }}
@@ -541,129 +522,27 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Crop Overlay Indicators */}
-          <AnimatePresence>
-            {state.isCropping && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 z-[80] border-[2px] border-dashed border-blue-500/40 pointer-events-none m-10 md:m-20"
-              >
-                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-blue-500"></div>
-                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-blue-500"></div>
-                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-blue-500"></div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-blue-500"></div>
-                <div className="absolute top-2 left-2 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-sm uppercase font-bold shadow-lg">
-                  Active Crop Area
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Status Indicator Overlays (Visible if not locked) */}
+          {!state.isLocked && !state.isFullscreen && (
+            <div className="absolute top-4 left-4 z-[90] flex flex-col gap-2 pointer-events-none transition-all duration-500">
+               <div className="flex items-center gap-3 bg-brand-surface/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 text-xs shadow-xl self-start pointer-events-auto">
+                 <div className="flex items-center gap-1.5 text-emerald-400">
+                   <Wifi className="w-3.5 h-3.5" />
+                   <span className="font-mono text-[10px]">{speed} Mbps</span>
+                 </div>
+                 <div className="h-3 w-px bg-white/10" />
+                 <div className="flex items-center gap-1.5 text-blue-400">
+                   <Cpu className="w-3.5 h-3.5" />
+                   <span className="text-[10px] font-bold uppercase tracking-tighter">Optimized</span>
+                 </div>
+               </div>
+            </div>
+          )}
         </main>
 
-        {/* --- Floating UI Info Overlays --- */}
-        <div className="absolute top-4 left-4 lg:left-[260px] z-[90] flex flex-col gap-2 pointer-events-none transition-all duration-500">
-           <div className="flex items-center gap-3 bg-brand-surface/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 text-xs shadow-xl self-start pointer-events-auto">
-             <div className="flex items-center gap-1.5 text-emerald-400">
-               <Wifi className="w-3.5 h-3.5" />
-               <span className="font-mono text-[10px]">{speed} Mbps</span>
-             </div>
-             <div className="w-px h-3 bg-white/10" />
-             <div className="flex items-center gap-1.5 text-blue-400">
-               <Cpu className="w-3.5 h-3.5" />
-               <span className="text-[10px] uppercase font-bold tracking-tighter">Optimized</span>
-             </div>
-           </div>
-        </div>
-
-        {/* --- Side Settings Panel --- */}
-        <AnimatePresence>
-          {isSidebarOpen && !state.isFullscreen && (
-            <motion.aside 
-              initial={{ x: 320 }}
-              animate={{ x: 0 }}
-              exit={{ x: 320 }}
-              className="w-80 bg-brand-sidebar border-l border-slate-800 p-6 flex flex-col gap-6 z-40"
-            >
-              <section>
-                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Zap className="w-3 h-3" /> Optimization
-                </h2>
-                <div className="space-y-4">
-                  <ToggleItem 
-                    label="Low Bandwidth Mode" 
-                    active={state.isLowData} 
-                    onClick={() => setState(p => ({ ...p, isLowData: !p.isLowData }))} 
-                  />
-                  <ToggleItem 
-                    label="Block Notifications" 
-                    active={true} 
-                    onClick={() => {}} 
-                  />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-400">RAM Purge Policy</span>
-                    <span className="text-xs font-bold bg-slate-800 px-2 py-1 rounded text-blue-400 uppercase tracking-tighter">Aggressive</span>
-                  </div>
-                </div>
-              </section>
-
-              <div className="h-px bg-slate-800 w-full"></div>
-
-              <section>
-                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Settings className="w-3 h-3" /> Experience
-                </h2>
-                <div className="space-y-4">
-                  <ToggleItem 
-                    label="Focus Mode" 
-                    active={state.isFocusMode} 
-                    onClick={() => setState(p => ({ ...p, isFocusMode: !p.isFocusMode }))} 
-                  />
-                  <ToggleItem 
-                    label="Keep Screen Awake" 
-                    active={true} 
-                    onClick={() => {}} 
-                    accent="blue"
-                  />
-                  <ToggleItem 
-                    label="Touch Lock" 
-                    active={state.isLocked} 
-                    onClick={() => setState(p => ({ ...p, isLocked: !p.isLocked }))} 
-                  />
-                  <ToggleItem 
-                    label="Low RAM Preview" 
-                    active={state.isLowRam} 
-                    onClick={() => setState(p => ({ ...p, isLowRam: !p.isLowRam }))} 
-                  />
-                </div>
-              </section>
-
-              <div className="mt-auto">
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center text-[10px] text-white font-bold">YT</div>
-                    <span className="text-xs font-bold uppercase tracking-wide text-blue-400">YouTube Optimized</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-                    Currently detecting YouTube player. Injecting high-efficiency container to save resources.
-                  </p>
-                  <div className="pt-2 border-t border-blue-500/20">
-                    <p className="text-[10px] text-blue-300 italic">
-                      Tip: Click "Open URL" at the top to change the website.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* --- Bottom Controls Footer --- */}
-      <AnimatePresence>
-        {!state.isFocusMode && showControls && (
-          <footer className="h-16 bg-brand-surface border-t border-white/5 flex items-center justify-center gap-4 z-50 shrink-0">
+        {/* --- Footer Controls: Hidden in Fullscreen --- */}
+        {!state.isFullscreen && (
+          <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-brand-surface/80 backdrop-blur-2xl px-2 py-2 rounded-2xl border border-white/5 shadow-2xl z-[150] max-w-[95vw] overflow-x-auto no-scrollbar">
             <FooterButton 
               icon={<Maximize className="w-5 h-5" />} 
               label="Fullscreen" 
@@ -673,16 +552,18 @@ export default function App() {
             <FooterButton 
               icon={<Crop className="w-5 h-5" />} 
               label="Fix Browser" 
-              onClick={() => setState(p => ({ ...p, isCropping: !p.isCropping }))}
+              onClick={() => !state.isLocked && setState(p => ({ ...p, isCropping: !p.isCropping }))}
               active={state.isCropping}
               variant="blue"
+              disabled={state.isLocked}
             />
             <FooterButton 
               icon={<User className="w-5 h-5" />} 
               label="Face Overlay" 
-              onClick={() => setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
+              onClick={() => !state.isLocked && setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
               active={state.isCamVisible}
               variant={state.isCamVisible ? 'blue' : 'default'}
+              disabled={state.isLocked}
             />
             <FooterButton 
               icon={state.isLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />} 
@@ -695,40 +576,80 @@ export default function App() {
             <FooterButton 
               icon={<Settings className="w-5 h-5" />} 
               label="Config" 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              active={isSidebarOpen}
+              onClick={() => !state.isLocked && setShowUrlBar(!showUrlBar)}
+              disabled={state.isLocked}
             />
           </footer>
         )}
-      </AnimatePresence>
 
-      {/* --- Cropping Control Panel --- */}
+      </div>
+
+      {/* --- Overlay Sub-menus: Control Panel --- */}
       <AnimatePresence>
-        {state.isCropping && (
-            <motion.div 
-              initial={{ y: 100 }}
-              animate={{ y: 0 }}
-              exit={{ y: 100 }}
-              className="absolute left-1/2 -translate-x-1/2 bottom-20 z-[100] flex flex-col gap-2 bg-brand-surface/90 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl items-center"
-            >
-              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest mb-1">Tip: Drag the screen to position</p>
-              <div className="flex gap-2">
-              <CropGridButton id="crop-up" onClick={() => adjustCrop('y', 50)} icon={<ArrowLeft className="rotate-90 w-4 h-4" />} />
-              <CropGridButton id="crop-left" onClick={() => adjustCrop('x', 50)} icon={<ArrowLeft className="w-4 h-4" />} />
-              <CropGridButton id="crop-right" onClick={() => adjustCrop('x', -50)} icon={<ArrowRight className="w-4 h-4" />} />
-              <CropGridButton id="crop-down" onClick={() => adjustCrop('y', -50)} icon={<ArrowRight className="rotate-90 w-4 h-4" />} />
+        {state.isCropping && !state.isFullscreen && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0, x: '-50%' }}
+            animate={{ y: 0, opacity: 1, x: '-50%' }}
+            exit={{ y: 100, opacity: 0, x: '-50%' }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] bg-brand-surface/90 backdrop-blur-3xl border border-white/5 p-4 rounded-3xl shadow-2xl w-[320px]"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Crop className="w-4 h-4 text-blue-500" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Active Crop Area</span>
+              </div>
+              <button onClick={() => setState(p => ({ ...p, isCropping: false }))} className="p-1 hover:bg-white/5 rounded-full"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 justify-center bg-black/40 p-3 rounded-2xl border border-white/5">
+              <CropGridButton id="crop-up" onClick={() => !state.isLocked && adjustCrop('y', 50)} icon={<ArrowRight className="-rotate-90 w-4 h-4" />} disabled={state.isLocked} />
+              <div className="w-full h-0" />
+              <CropGridButton id="crop-left" onClick={() => !state.isLocked && adjustCrop('x', 50)} icon={<ArrowLeft className="w-4 h-4 text-slate-400" />} disabled={state.isLocked} />
+              <CropGridButton id="crop-right" onClick={() => !state.isLocked && adjustCrop('x', -50)} icon={<ArrowRight className="w-4 h-4 text-slate-400" />} disabled={state.isLocked} />
+              <div className="w-full h-0" />
+              <CropGridButton id="crop-down" onClick={() => !state.isLocked && adjustCrop('y', -50)} icon={<ArrowRight className="rotate-90 w-4 h-4" />} disabled={state.isLocked} />
               <div className="w-px h-10 bg-white/5 mx-2" />
-              <CropGridButton id="crop-in" onClick={() => adjustCrop('scale', 0.1)} icon={<Plus className="w-4 h-4 text-blue-400" />} />
-              <CropGridButton id="crop-out" onClick={() => adjustCrop('scale', -0.1)} icon={<Minus className="w-4 h-4 text-blue-400" />} />
-              <CropGridButton id="crop-reset" onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0, camScale: 1, camX: 20, camY: 20 }))} icon={<RotateCw className="w-4 h-4 text-slate-400" />} />
+              <CropGridButton id="crop-in" onClick={() => !state.isLocked && adjustCrop('scale', 0.1)} icon={<Plus className="w-4 h-4 text-blue-400" />} disabled={state.isLocked} />
+              <CropGridButton id="crop-out" onClick={() => !state.isLocked && adjustCrop('scale', -0.1)} icon={<Minus className="w-4 h-4 text-blue-400" />} disabled={state.isLocked} />
+              <CropGridButton id="crop-reset" onClick={() => !state.isLocked && setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0, camScale: 1, camX: 20, camY: 20 }))} icon={<RotateCw className="w-4 h-4 text-slate-400" />} disabled={state.isLocked} />
             </div>
             {state.isCamVisible && (
-              <div className="flex gap-2 justify-center mt-2 border-t border-white/5 pt-2">
-                <p className="text-[9px] text-slate-500 uppercase font-bold mr-2">Face Size:</p>
-                <button onClick={() => setState(p => ({ ...p, camScale: Math.max(0.5, p.camScale - 0.1) }))} className="p-1 hover:bg-white/5 rounded"><Minus className="w-3 h-3" /></button>
-                <button onClick={() => setState(p => ({ ...p, camScale: Math.min(3, p.camScale + 0.1) }))} className="p-1 hover:bg-white/5 rounded"><Plus className="w-3 h-3" /></button>
+              <div className="mt-4 border-t border-white/5 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Face Overlay Size</p>
+                  <span className="text-[10px] font-mono text-blue-400 font-bold">{state.camScale.toFixed(1)}x</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    disabled={state.isLocked}
+                    onClick={() => setState(p => ({ ...p, camScale: Math.max(0.5, parseFloat((p.camScale - 0.1).toFixed(1))) }))} 
+                    className={`p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all ${state.isLocked ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  
+                  <input 
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.1"
+                    value={state.camScale}
+                    disabled={state.isLocked}
+                    onChange={(e) => setState(p => ({ ...p, camScale: parseFloat(e.target.value) }))}
+                    className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+
+                  <button 
+                    disabled={state.isLocked}
+                    onClick={() => setState(p => ({ ...p, camScale: Math.min(3, parseFloat((p.camScale + 0.1).toFixed(1))) }))} 
+                    className={`p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all ${state.isLocked ? 'opacity-20 cursor-not-allowed' : 'active:scale-90'}`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
+            <p className="text-[9px] text-slate-500 text-center mt-3 font-medium">TIP: DRAG BROWSER TO POSITION</p>
           </motion.div>
         )}
       </AnimatePresence>
