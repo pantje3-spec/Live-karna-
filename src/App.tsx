@@ -36,10 +36,13 @@ import {
   Activity,
   Search,
   Monitor,
-  ExternalLink,
   Volume2,
   Play,
-  Pause
+  Pause,
+  Users,
+  Radio,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -61,6 +64,18 @@ interface StreamPreset {
   webZoom: number;
   rotation: number;
   isAspectLocked: boolean;
+  camScale: number;
+  camX: number;
+  camY: number;
+  isCamVisible: boolean;
+  customPhoto: string | null;
+  isPhotoVisible: boolean;
+  photoScale: number;
+  photoX: number;
+  photoY: number;
+  photoCropX: number;
+  photoCropY: number;
+  photoCropScale: number;
 }
 
 interface StreamState {
@@ -90,6 +105,16 @@ interface StreamState {
   bgImage: string;
   isMusicPlaying: boolean;
   musicVolume: number;
+  isStadiumSoundPlaying: boolean;
+  stadiumVolume: number;
+  customPhoto: string | null;
+  isPhotoVisible: boolean;
+  photoScale: number;
+  photoX: number;
+  photoY: number;
+  photoCropX: number;
+  photoCropY: number;
+  photoCropScale: number;
 }
 
 const DEFAULT_TABS: Tab[] = [
@@ -123,15 +148,23 @@ export default function App() {
     canvasBg: '#0A0B0D',
     bgImage: 'https://res.cloudinary.com/dm5spjnjk/image/upload/v1779169345/chennai-new-1710336746475-compressed_dlgwid.jpg',
     isMusicPlaying: false,
-    musicVolume: 0.5
+    musicVolume: 0.5,
+    isStadiumSoundPlaying: false,
+    stadiumVolume: 0.5,
+    customPhoto: null,
+    isPhotoVisible: false,
+    photoScale: 1,
+    photoX: 80,
+    photoY: 80,
+    photoCropX: 0,
+    photoCropY: 0,
+    photoCropScale: 1
   });
 
   const [speed, setSpeed] = useState<string>('10.0');
   const [showUrlBar, setShowUrlBar] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [presets, setPresets] = useState<StreamPreset[]>([]);
-  const [isPiPActive, setIsPiPActive] = useState(false);
-  const pipWindowRef = useRef<any>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('stream_presets');
@@ -146,7 +179,7 @@ export default function App() {
 
   const savePreset = () => {
     const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
-    const name = prompt("Enter a name for this preset:", new URL(activeTab.url).hostname) || 'Untitled Preset';
+    const name = prompt("Enter a name for this configuration:", new URL(activeTab.url).hostname) || 'Untitled Layout';
     
     const newPreset: StreamPreset = {
       id: Date.now().toString(),
@@ -157,7 +190,19 @@ export default function App() {
       cropOffsetY: state.cropOffsetY,
       webZoom: state.webZoom,
       rotation: state.rotation,
-      isAspectLocked: state.isAspectLocked
+      isAspectLocked: state.isAspectLocked,
+      camScale: state.camScale,
+      camX: state.camX,
+      camY: state.camY,
+      isCamVisible: state.isCamVisible,
+      customPhoto: state.customPhoto,
+      isPhotoVisible: state.isPhotoVisible,
+      photoScale: state.photoScale,
+      photoX: state.photoX,
+      photoY: state.photoY,
+      photoCropX: state.photoCropX,
+      photoCropY: state.photoCropY,
+      photoCropScale: state.photoCropScale
     };
 
     const updated = [...presets, newPreset];
@@ -165,67 +210,8 @@ export default function App() {
     localStorage.setItem('stream_presets', JSON.stringify(updated));
   };
 
-  const togglePiP = async () => {
-    if (isPiPActive) {
-      pipWindowRef.current?.close();
-      return;
-    }
-
-    if (!('documentPictureInPicture' in window)) {
-      alert("Document Picture-in-Picture is not supported in your browser (Requires Chrome 111+ or Edge 111+).");
-      return;
-    }
-
-    try {
-      const pip = (window as any).documentPictureInPicture;
-      const pipWindow = await pip.requestWindow({
-        width: 1024,
-        height: 576,
-      });
-
-      pipWindowRef.current = pipWindow;
-
-      // Copy styles to PiP window
-      [...document.styleSheets].forEach((styleSheet) => {
-        try {
-          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
-          const style = document.createElement('style');
-          style.textContent = cssRules;
-          pipWindow.document.head.appendChild(style);
-        } catch (e) {
-          const link = document.createElement('link');
-          if (styleSheet.href) {
-            link.rel = 'stylesheet';
-            link.href = styleSheet.href;
-            pipWindow.document.head.appendChild(link);
-          }
-        }
-      });
-
-      // Move the capture area container to the PiP window
-      const container = containerRef.current;
-      if (container) {
-        pipWindow.document.body.appendChild(container);
-        pipWindow.document.body.style.margin = '0';
-        pipWindow.document.body.style.backgroundColor = state.canvasBg;
-        pipWindow.document.body.style.overflow = 'hidden';
-        setIsPiPActive(true);
-      }
-
-      pipWindow.addEventListener('pagehide', () => {
-        setIsPiPActive(false);
-        pipWindowRef.current = null;
-        
-        // Move back to main window
-        const placeholder = document.getElementById('pip-placeholder');
-        if (placeholder && container) {
-          placeholder.replaceWith(container);
-        }
-      }, { once: true });
-
-    } catch (err) {
-      console.error("PiP Error:", err);
-    }
+  const toggleFullscreen = () => {
+    setState(p => ({ ...p, isFullscreen: !p.isFullscreen }));
   };
 
   const loadPreset = (preset: StreamPreset) => {
@@ -237,6 +223,18 @@ export default function App() {
       webZoom: preset.webZoom,
       rotation: preset.rotation,
       isAspectLocked: preset.isAspectLocked,
+      camScale: preset.camScale ?? p.camScale,
+      camX: preset.camX ?? p.camX,
+      camY: preset.camY ?? p.camY,
+      isCamVisible: preset.isCamVisible ?? p.isCamVisible,
+      customPhoto: preset.customPhoto ?? p.customPhoto,
+      isPhotoVisible: preset.isPhotoVisible ?? p.isPhotoVisible,
+      photoScale: preset.photoScale ?? p.photoScale,
+      photoX: preset.photoX ?? p.photoX,
+      photoY: preset.photoY ?? p.photoY,
+      photoCropX: preset.photoCropX ?? p.photoCropX,
+      photoCropY: preset.photoCropY ?? p.photoCropY,
+      photoCropScale: preset.photoCropScale ?? p.photoCropScale,
       tabs: p.tabs.map(t => t.id === p.activeTabId ? { ...t, url: preset.url } : t)
     }));
     setShowUrlBar(false);
@@ -249,12 +247,96 @@ export default function App() {
     localStorage.setItem('stream_presets', JSON.stringify(updated));
   };
 
+  const exportPresets = () => {
+    const blob = new Blob([JSON.stringify(presets, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stream-studio-presets-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importPresets = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const imported = JSON.parse(event.target?.result as string);
+        if (Array.isArray(imported)) {
+          const updated = [...presets, ...imported.filter(p => !presets.find(existing => existing.id === (p as any).id))];
+          setPresets(updated);
+          localStorage.setItem('stream_presets', JSON.stringify(updated));
+          alert(`Successfully imported layouts!`);
+        }
+      } catch (err) {
+        alert("Failed to import presets. Invalid file format.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const stadiumRef = useRef<HTMLAudioElement>(null);
+  const dragStart = useRef({ x: 0, y: 0 });
 
-  // --- Effects ---
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case ' ': // Space
+          e.preventDefault();
+          setState(p => ({ ...p, isMusicPlaying: !p.isMusicPlaying }));
+          break;
+        case 'f':
+          toggleFullscreen();
+          break;
+        case 'v':
+          if (!state.isLocked) {
+            setState(p => ({ ...p, isCamVisible: !p.isCamVisible }));
+          }
+          break;
+        case 'l':
+          setState(p => ({ ...p, isLocked: !p.isLocked }));
+          break;
+        case 'm':
+          setState(p => ({ ...p, isStadiumSoundPlaying: !p.isStadiumSoundPlaying }));
+          break;
+        case 's':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            savePreset();
+          }
+          break;
+        case 'c':
+          if (!state.isLocked) {
+            setState(p => ({ ...p, isCropping: !p.isCropping }));
+          }
+          break;
+        case 'arrowup':
+          e.preventDefault();
+          setState(p => ({ ...p, musicVolume: Math.min(1, p.musicVolume + 0.1) }));
+          break;
+        case 'arrowdown':
+          e.preventDefault();
+          setState(p => ({ ...p, musicVolume: Math.max(0, p.musicVolume - 0.1) }));
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state.isLocked, toggleFullscreen]);
 
   // Background Music
   useEffect(() => {
@@ -270,6 +352,20 @@ export default function App() {
       }
     }
   }, [state.isMusicPlaying, state.musicVolume]);
+
+  // Stadium Sound
+  useEffect(() => {
+    if (stadiumRef.current) {
+      stadiumRef.current.volume = state.stadiumVolume;
+      if (state.isStadiumSoundPlaying) {
+        stadiumRef.current.play().catch(() => {
+          setState(p => ({ ...p, isStadiumSoundPlaying: false }));
+        });
+      } else {
+        stadiumRef.current.pause();
+      }
+    }
+  }, [state.isStadiumSoundPlaying, state.stadiumVolume]);
   
   // Camera Stream
   useEffect(() => {
@@ -327,7 +423,7 @@ export default function App() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingCam, setIsDraggingCam] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
   const onMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (!state.isCropping || state.isLocked) return;
@@ -339,11 +435,41 @@ export default function App() {
 
   const onMouseDownCam = (e: React.MouseEvent | React.TouchEvent) => {
     if (state.isLocked) return;
-    e.stopPropagation();
+    if (e.cancelable) e.preventDefault(); 
     setIsDraggingCam(true);
     const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
     dragStart.current = { x: clientX - state.camX, y: clientY - state.camY };
+  };
+
+  const onMouseDownPhoto = (e: React.MouseEvent | React.TouchEvent) => {
+    if (state.isLocked) return;
+    if (e.cancelable) e.preventDefault(); 
+    setIsDraggingPhoto(true);
+    const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
+    dragStart.current = { x: clientX - state.photoX, y: clientY - state.photoY };
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setState(p => ({ ...p, customPhoto: reader.result as string, isPhotoVisible: true }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const reloadIframe = () => {
+    if (iframeRef.current) {
+      const currentUrl = activeTab.url;
+      iframeRef.current.src = 'about:blank';
+      setTimeout(() => {
+        if (iframeRef.current) iframeRef.current.src = currentUrl;
+      }, 50);
+    }
   };
 
   const onMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -362,19 +488,30 @@ export default function App() {
         camX: clientX - dragStart.current.x,
         camY: clientY - dragStart.current.y
       }));
+    } else if (isDraggingPhoto) {
+      setState(p => ({
+        ...p,
+        photoX: clientX - dragStart.current.x,
+        photoY: clientY - dragStart.current.y
+      }));
     }
   };
 
   const onMouseUp = () => {
     setIsDragging(false);
     setIsDraggingCam(false);
-  };
-
-  const toggleFullscreen = () => {
-    setState(p => ({ ...p, isFullscreen: !p.isFullscreen }));
+    setIsDraggingPhoto(false);
   };
 
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
+
+  const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setIsPortrait(window.innerHeight > window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div 
@@ -385,6 +522,22 @@ export default function App() {
       onTouchMove={onMouseMove}
       onTouchEnd={onMouseUp}
     >
+      {/* Orientation Suggestion */}
+      <AnimatePresence>
+        {isPortrait && !state.isFullscreen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
+          >
+            <div className="bg-orange-500/80 backdrop-blur-md px-3 py-1 rounded-full border border-orange-400/50 flex items-center gap-2 shadow-lg">
+              <RotateCw className="w-3 h-3 text-white animate-spin-slow" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-white leading-none">Landscape Mode Recommended</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Stadium Background Overlay */}
       <div 
         className="absolute inset-0 z-0 opacity-30 pointer-events-none"
@@ -399,6 +552,11 @@ export default function App() {
       <audio 
         ref={audioRef}
         src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" 
+        loop
+      />
+      <audio 
+        ref={stadiumRef}
+        src="https://www.soundjay.com/misc/sounds/stadium-crowd-1.mp3" 
         loop
       />
 
@@ -454,27 +612,10 @@ export default function App() {
       </AnimatePresence>
 
       {/* Capture Area (The Iframe) */}
-       {isPiPActive ? (
-         <div id="pip-placeholder" className="flex-1 flex flex-col items-center justify-center bg-black/20 italic text-slate-500 text-sm gap-4 transition-all animate-pulse">
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-              <ExternalLink className="w-6 h-6 text-blue-500" />
-            </div>
-            <div className="text-center">
-              <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Studio Mode: Active</p>
-              <p className="mt-1">Stream popped out to PiP Window</p>
-            </div>
-            <button 
-              onClick={togglePiP}
-              className="mt-2 px-4 py-2 bg-blue-600/20 text-blue-400 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600/30 transition-all"
-            >
-              Return to Studio
-            </button>
-         </div>
-       ) : (
-         <main 
-           ref={containerRef}
-           className="flex-1 relative overflow-hidden group flex items-center justify-center bg-black/10 h-full w-full"
-         >
+       <main 
+         ref={containerRef}
+         className="flex-1 relative overflow-hidden group flex items-center justify-center bg-black/10 h-full w-full"
+       >
             <div 
               className={`relative transition-all duration-500 shadow-2xl overflow-hidden ${state.isAspectLocked ? 'aspect-video w-full max-w-7xl' : 'w-full h-full'}`}
               style={{
@@ -503,12 +644,12 @@ export default function App() {
               </div>
             </div>
   
-          {/* Edit Mode Helpers */}
           {state.isCropping && !state.isLocked && (
             <div 
               className="absolute inset-0 z-[60] cursor-move bg-blue-500/5 border-2 border-dashed border-blue-500/20 pointer-events-auto"
               onMouseDown={onMouseDown}
               onTouchStart={onMouseDown}
+              style={{ touchAction: 'none' }}
             />
           )}
   
@@ -545,6 +686,40 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Custom Photo Overlay */}
+          <AnimatePresence>
+            {state.isPhotoVisible && state.customPhoto && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className={`absolute z-[110] rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
+                onMouseDown={onMouseDownPhoto}
+                onTouchStart={onMouseDownPhoto}
+                style={{
+                  width: `${120 * state.photoScale}px`,
+                  height: `${120 * state.photoScale}px`,
+                  left: `${state.photoX}px`,
+                  top: `${state.photoY}px`,
+                  touchAction: 'none'
+                }}
+              >
+                <div className="w-full h-full flex items-center justify-center overflow-hidden bg-black/20">
+                  <motion.img 
+                    src={state.customPhoto} 
+                    alt="Custom Overlay" 
+                    className="max-w-none"
+                    style={{
+                      scale: state.photoCropScale,
+                      x: state.photoCropX,
+                      y: state.photoCropY,
+                    }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
   
           {/* Static Info Layer (Hidden in Fullscreen) */}
           {!state.isFullscreen && !state.isLocked && (
@@ -563,7 +738,6 @@ export default function App() {
             </div>
           )}
         </main>
-      )}
 
       {/* --- Controls Footer (The 4 Main Buttons) --- */}
       <AnimatePresence>
@@ -572,20 +746,13 @@ export default function App() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className={`fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-[#1A1B1E]/90 backdrop-blur-2xl p-2 rounded-2xl border border-white/5 shadow-2xl z-[500] ${state.isLocked ? 'opacity-60' : ''}`}
+            className={`fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-[#1A1B1E]/90 backdrop-blur-2xl p-2 rounded-2xl border border-white/5 shadow-2xl z-[500] safe-bottom ${state.isLocked ? 'opacity-60' : ''}`}
           >
             <FooterButton 
               icon={<Maximize className="w-5 h-5" />} 
               label="Fullscreen" 
               onClick={toggleFullscreen}
               active={state.isFullscreen}
-            />
-            <FooterButton 
-              icon={<ExternalLink className="w-5 h-5" />} 
-              label="PiP Mode" 
-              onClick={togglePiP}
-              active={isPiPActive}
-              variant="blue"
             />
             <FooterButton 
               icon={<Crop className="w-5 h-5" />} 
@@ -645,11 +812,21 @@ export default function App() {
             <motion.div 
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-sm bg-[#1A1B1E] border border-white/10 rounded-3xl p-6 shadow-2xl"
+              className="w-full max-w-sm bg-[#1A1B1E] border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-bold text-white">Stream Configuration</h3>
+              <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#1A1B1E] py-2 z-10 border-b border-white/5">
+                <h3 className="text-sm font-bold text-white">Stream Studio Config</h3>
                 <button onClick={() => setShowUrlBar(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-6">
+                <button 
+                  onClick={reloadIframe}
+                  className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                  Reload Stream
+                </button>
               </div>
 
               <form onSubmit={handleNav} className="space-y-4">
@@ -702,6 +879,154 @@ export default function App() {
                     />
                     <span className="text-[10px] font-mono font-bold text-slate-500 w-8">{Math.round(state.musicVolume * 100)}%</span>
                   </div>
+                </div>
+
+                {/* Stadium & Atmosphere */}
+                <div className="border-t border-white/5 pt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Radio className="w-4 h-4 text-emerald-400" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Live Atmosphere</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Continuous Ambience */}
+                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-[9px] font-bold text-slate-300">Continuous Crowd</span>
+                        </div>
+                        <button 
+                          onClick={() => setState(p => ({ ...p, isStadiumSoundPlaying: !p.isStadiumSoundPlaying }))}
+                          className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                            state.isStadiumSoundPlaying ? 'bg-emerald-600/20 text-emerald-400 ring-1 ring-emerald-500/30' : 'bg-white/5 text-slate-500'
+                          }`}
+                        >
+                          {state.isStadiumSoundPlaying ? 'Live Now' : 'Go Live'}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Volume2 className="w-3 h-3 text-slate-600" />
+                        <input 
+                          type="range" min="0" max="1" step="0.01" 
+                          value={state.stadiumVolume}
+                          onChange={(e) => setState(p => ({ ...p, stadiumVolume: parseFloat(e.target.value) }))}
+                          className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                        <span className="text-[9px] font-mono text-slate-500 w-6">{Math.round(state.stadiumVolume * 100)}</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Reaction Sounds */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.zapsplat.com/wp-content/uploads/2015/sound-effects-one/sports_stadium_crowd_cheer_applause_whistle.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 p-2 rounded-xl flex flex-col items-center gap-1 transition-all group"
+                      >
+                        <span className="text-[14px] group-active:scale-125 transition-transform">🏏</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-blue-400">Chakka / 6</span>
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.soundjay.com/human/sounds/applause-01.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-orange-600/10 hover:bg-orange-600/20 border border-orange-500/20 p-2 rounded-xl flex flex-col items-center gap-1 transition-all group"
+                      >
+                        <span className="text-[14px] group-active:scale-125 transition-transform">👏</span>
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-orange-400">Choka / 4</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Identity Photo */}
+                <div className="border-t border-white/5 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-purple-400" />
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Apna Photo (Identity Overlay)</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       {state.customPhoto && (
+                         <button 
+                           onClick={() => setState(p => ({ ...p, isPhotoVisible: !p.isPhotoVisible }))}
+                           className={`p-2 rounded-xl transition-all ${
+                             state.isPhotoVisible ? 'bg-purple-600/20 text-purple-400 ring-1 ring-purple-500/50' : 'bg-white/5 text-slate-400'
+                           }`}
+                         >
+                           {state.isPhotoVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                         </button>
+                       )}
+                       <label className="p-2 bg-purple-600/20 text-purple-400 rounded-xl cursor-pointer hover:bg-purple-600/30 transition-all" title="Upload Photo">
+                         <Upload className="w-4 h-4" />
+                         <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                       </label>
+                    </div>
+                  </div>
+                  {state.customPhoto && (
+                    <div className="space-y-4 bg-black/20 p-4 rounded-2xl border border-white/5">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Overlay Size</label>
+                          <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.photoScale * 100)}%</span>
+                        </div>
+                        <input 
+                          type="range" min="0.1" max="4" step="0.01" 
+                          value={state.photoScale}
+                          onChange={(e) => setState(p => ({ ...p, photoScale: parseFloat(e.target.value) }))}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                        />
+                      </div>
+
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Photo Zoom (Crop)</label>
+                          <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.photoCropScale * 100)}%</span>
+                        </div>
+                        <input 
+                          type="range" min="1" max="5" step="0.1" 
+                          value={state.photoCropScale}
+                          onChange={(e) => setState(p => ({ ...p, photoCropScale: parseFloat(e.target.value) }))}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Photo X Offset</label>
+                          <input 
+                            type="range" min="-200" max="200" step="1" 
+                            value={state.photoCropX}
+                            onChange={(e) => setState(p => ({ ...p, photoCropX: parseInt(e.target.value) }))}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Photo Y Offset</label>
+                          <input 
+                            type="range" min="-200" max="200" step="1" 
+                            value={state.photoCropY}
+                            onChange={(e) => setState(p => ({ ...p, photoCropY: parseInt(e.target.value) }))}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => setState(p => ({ ...p, customPhoto: null, isPhotoVisible: false }))}
+                        className="w-full py-2 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest text-red-500/60 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Remove Photo
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Reset Section */}
@@ -774,6 +1099,21 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+
+                  <div className="flex gap-2 mt-4">
+                    <button 
+                      onClick={exportPresets}
+                      className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Export
+                    </button>
+                    <label className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                      <Save className="w-3.5 h-3.5" />
+                      Import
+                      <input type="file" accept=".json" onChange={importPresets} className="hidden" />
+                    </label>
+                  </div>
                 </div>
 
                 {/* Canvas Theme */}
@@ -802,75 +1142,92 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Browser Tool Panel (Floating) */}
       <AnimatePresence>
         {state.isCropping && !state.isLocked && !state.isFullscreen && (
           <motion.div 
-            initial={{ x: 200, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 200, opacity: 0 }}
-            className="fixed right-6 top-1/2 -translate-y-1/2 z-[500] w-20 bg-[#1A1B1E]/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-3 flex flex-col items-center gap-4 shadow-2xl"
+            initial={{ y: 200, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 200, opacity: 0 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-6 sm:top-1/2 sm:-translate-y-1/2 z-[500] w-[90vw] sm:w-20 bg-[#1A1B1E]/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-3 flex flex-row sm:flex-col items-center gap-2 sm:gap-4 shadow-2xl overflow-x-auto no-scrollbar"
           >
+             <button 
+               title="Save Current Layout" 
+               onClick={savePreset} 
+               className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-3 group border-emerald-500/30 bg-emerald-500/5 shrink-0"
+             >
+               <Save className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+               <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-400 hidden sm:block">Save Layout</span>
+             </button>
+
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
+
              <button 
                title="Reset Crop Zoom & Position" 
                onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0 }))} 
-               className="tool-btn flex flex-col items-center gap-1 py-3 group border-blue-500/30 bg-blue-500/5 w-full"
+               className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-3 group border-blue-500/30 bg-blue-500/5 shrink-0"
              >
                <RotateCw className="w-4 h-4 text-blue-500 group-hover:rotate-180 transition-transform duration-500" />
-               <span className="text-[7px] font-black uppercase tracking-tighter text-blue-400">Reset Crop</span>
+               <span className="text-[7px] font-black uppercase tracking-tighter text-blue-400 hidden sm:block">Reset Crop</span>
              </button>
 
-             <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
-             <div className="flex flex-col items-center gap-2">
+             <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
                <button 
                  onClick={() => setState(p => ({ ...p, isAspectLocked: !p.isAspectLocked }))}
-                 className={`tool-btn flex flex-col items-center gap-1 py-2 ${state.isAspectLocked ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : ''}`}
+                 className={`tool-btn flex flex-col items-center gap-1 py-1 sm:py-2 ${state.isAspectLocked ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : ''}`}
                  title="Toggle 16:9 Aspect Lock"
                >
                  <Monitor className={`w-4 h-4 ${state.isAspectLocked ? 'text-blue-400' : 'text-slate-500'}`} />
-                 <span className="text-[7px] font-black uppercase tracking-tighter">16:9 Lock</span>
+                 <span className="text-[7px] font-black uppercase tracking-tighter hidden sm:block">16:9 Lock</span>
                </button>
              </div>
 
-             <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
-             <div className="flex flex-col items-center gap-2">
+             <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
                <button 
                  onClick={() => setState(p => ({ ...p, rotation: (p.rotation + 90) % 360 }))}
-                 className="tool-btn flex flex-col items-center gap-1 py-2"
+                 className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-2"
                  title="Rotate 90°"
                >
                  <RotateCw className="w-4 h-4 text-blue-400" />
                </button>
-               <div className="flex flex-col items-center">
+               <div className="flex flex-col items-center min-w-[40px]">
                  <input 
                    type="number" 
                    value={state.rotation} 
                    onChange={(e) => setState(p => ({ ...p, rotation: parseInt(e.target.value) || 0 }))}
-                   className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-orange-400 font-mono text-center focus:border-orange-500/50 outline-none"
+                   className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-orange-400 font-mono text-center focus:border-orange-500/50 outline-none"
                  />
-                 <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 mt-1">Deg°</span>
+                 <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 mt-1">Deg</span>
                </div>
              </div>
 
-             <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
-             <div className="flex flex-col items-center gap-1">
+             <div className="flex flex-row sm:flex-col items-center gap-1 shrink-0">
                 <button onClick={() => adjustCrop('y', 50)} className="tool-btn"><ArrowLeft className="rotate-90 w-4 h-4" /></button>
-                <div className="flex gap-1">
+                <div className="flex flex-col sm:flex-row gap-1">
                   <button onClick={() => adjustCrop('x', 50)} className="tool-btn"><ArrowLeft className="w-4 h-4" /></button>
                   <button onClick={() => adjustCrop('x', -50)} className="tool-btn"><ArrowRight className="w-4 h-4" /></button>
                 </div>
                 <button onClick={() => adjustCrop('y', -50)} className="tool-btn"><ArrowRight className="rotate-90 w-4 h-4" /></button>
              </div>
              
-             <div className="flex flex-col items-center gap-2">
-               <div className="flex gap-1">
-                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, p.webZoom + 0.01) }))} className="tool-btn p-1.5"><Plus className="w-3.5 h-3.5" /></button>
-                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, p.webZoom - 0.01) }))} className="tool-btn p-1.5"><Minus className="w-3.5 h-3.5" /></button>
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
+
+             <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
+               <div className="flex flex-col sm:flex-row gap-1">
+                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, p.webZoom + 0.01) }))} className="tool-btn p-1.5"><Plus className="w-3.5 h-3.5 text-emerald-400" /></button>
+                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, p.webZoom - 0.01) }))} className="tool-btn p-1.5"><Minus className="w-3.5 h-3.5 text-red-400" /></button>
                </div>
-               <div className="flex flex-col items-center">
+               <div className="flex flex-col items-center min-w-[40px]">
                  <input 
                    type="number" 
                    step="0.01"
@@ -878,18 +1235,19 @@ export default function App() {
                    max="3"
                    value={state.webZoom.toFixed(2)} 
                    onChange={(e) => setState(p => ({ ...p, webZoom: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
-                   className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-emerald-400 font-mono text-center focus:border-emerald-500/50 outline-none"
+                   className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-emerald-400 font-mono text-center focus:border-emerald-500/50 outline-none"
                  />
-                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter mt-1">Content Mag</span>
+                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter mt-1">Mag</span>
                </div>
              </div>
 
-             <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
-             <div className="flex flex-col items-center gap-2">
+             <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
                 <button onClick={() => adjustCrop('scale', 0.01)} className="tool-btn"><Plus className="w-4 h-4 text-blue-500" /></button>
                 
-                <div className="h-32 flex items-center justify-center py-2">
+                <div className="hidden sm:flex h-32 items-center justify-center py-2">
                   <input 
                     type="range"
                     min="0.1"
@@ -901,7 +1259,7 @@ export default function App() {
                   />
                 </div>
 
-                <div className="flex flex-col items-center py-1">
+                <div className="flex flex-col items-center py-1 min-w-[44px]">
                   <input 
                     type="number" 
                     step="0.01"
@@ -909,20 +1267,21 @@ export default function App() {
                     max="5"
                     value={state.cropScale.toFixed(2)} 
                     onChange={(e) => setState(p => ({ ...p, cropScale: Math.max(0.1, Math.min(5, parseFloat(e.target.value) || 1)) }))}
-                    className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-blue-400 font-mono text-center focus:border-blue-500/50 outline-none"
+                    className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-blue-400 font-mono text-center focus:border-blue-500/50 outline-none"
                   />
-                  <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter mt-1">Zoom</span>
+                  <span className="text-[7px] sm:text-[8px] font-bold text-slate-600 uppercase tracking-tighter mt-1">Zoom</span>
                 </div>
 
                 <button onClick={() => adjustCrop('scale', -0.01)} className="tool-btn"><Minus className="w-4 h-4 text-blue-500" /></button>
               </div>
 
-             <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
              
              <button 
-               title="Reset All Browser Transforms" 
+               title="Full Reset" 
                onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0, webZoom: 1, isAspectLocked: false, rotation: 0 }))} 
-               className="tool-btn mt-2 opacity-50 hover:opacity-100"
+               className="tool-btn opacity-50 hover:opacity-100 shrink-0"
              >
                <Maximize className="w-4 h-4 text-slate-500" />
              </button>
@@ -934,12 +1293,24 @@ export default function App() {
       <AnimatePresence>
         {state.isCamVisible && !state.isLocked && !state.isFullscreen && !state.isCropping && (
           <motion.div 
-            initial={{ x: -200, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -200, opacity: 0 }}
-            className="fixed left-6 top-1/2 -translate-y-1/2 z-[500] w-20 bg-[#1A1B1E]/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-3 flex flex-col items-center gap-4 shadow-2xl"
+            initial={{ y: 200, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 200, opacity: 0 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:right-auto sm:left-6 sm:top-1/2 sm:-translate-y-1/2 z-[500] w-[90vw] sm:w-20 bg-[#1A1B1E]/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-3 flex flex-row sm:flex-col items-center gap-2 sm:gap-4 shadow-2xl overflow-x-auto no-scrollbar"
           >
-             <div className="flex flex-col items-center gap-3">
+             <button 
+               title="Save Layout" 
+               onClick={savePreset} 
+               className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-3 border-emerald-500/30 bg-emerald-500/5 shrink-0"
+             >
+               <Save className="w-4 h-4 text-emerald-500" />
+               <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-400 hidden sm:block">Save</span>
+             </button>
+
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
+
+             <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-3 shrink-0">
                <button 
                  onClick={() => setState(p => ({ ...p, camScale: Math.min(3, parseFloat((p.camScale + 0.01).toFixed(2))) }))} 
                  className="tool-btn"
@@ -947,7 +1318,7 @@ export default function App() {
                  <Plus className="w-4 h-4 text-emerald-500" />
                </button>
 
-               <div className="h-32 flex items-center justify-center py-4">
+               <div className="hidden sm:flex h-32 items-center justify-center py-4">
                  <input 
                    type="range"
                    min="0.1"
@@ -967,12 +1338,48 @@ export default function App() {
                </button>
              </div>
 
-             <div className="flex flex-col items-center gap-1">
-               <span className="text-[10px] font-mono font-black text-blue-400">{state.camScale.toFixed(2)}x</span>
-               <div className="h-px w-8 bg-white/10" />
+             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
+
+             <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-1 shrink-0">
+               <div className="flex flex-col items-center min-w-[44px]">
+                 <input 
+                   type="number" 
+                   step="0.01"
+                   min="0.1"
+                   max="3"
+                   value={state.camScale.toFixed(2)} 
+                   onChange={(e) => setState(p => ({ ...p, camScale: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
+                   className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-blue-400 font-mono text-center focus:border-blue-500/50 outline-none"
+                 />
+                 <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 mt-1">Size</span>
+               </div>
+               
+               <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0 mx-1" />
+
+               <div className="flex flex-col sm:flex-row gap-1 shrink-0">
+                 <input 
+                   type="number"
+                   value={state.camX.toFixed(0)}
+                   onChange={(e) => setState(p => ({ ...p, camX: parseInt(e.target.value) || 0 }))}
+                   className="w-10 sm:w-8 bg-white/10 border border-white/20 rounded px-1 py-1 text-[9px] sm:text-[7px] text-slate-400 font-mono text-center outline-none"
+                   title="Cam X"
+                 />
+                 <input 
+                   type="number"
+                   value={state.camY.toFixed(0)}
+                   onChange={(e) => setState(p => ({ ...p, camY: parseInt(e.target.value) || 0 }))}
+                   className="w-10 sm:w-8 bg-white/10 border border-white/20 rounded px-1 py-1 text-[9px] sm:text-[7px] text-slate-400 font-mono text-center outline-none"
+                   title="Cam Y"
+                 />
+               </div>
+
+               <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0 my-2" />
+               <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0 mx-1" />
+
                <button 
                  onClick={() => setState(p => ({ ...p, camX: 50, camY: 50, camScale: 1 }))} 
-                 className="tool-btn"
+                 className="tool-btn shrink-0"
                >
                  <RotateCw className="w-4 h-4 text-slate-500" />
                </button>
@@ -983,10 +1390,32 @@ export default function App() {
 
       <style dangerouslySetInnerHTML={{ __html: `
         .tool-btn {
-          @apply p-2.5 bg-white/5 hover:bg-white/10 active:scale-90 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white;
+          @apply p-2.5 sm:p-2 bg-white/5 hover:bg-white/10 active:scale-90 rounded-xl transition-all border border-white/5 text-slate-400 hover:text-white flex items-center justify-center;
+          min-width: 44px;
+          min-height: 44px;
+        }
+        @media (max-width: 640px) {
+          .tool-btn {
+             min-width: 40px;
+             min-height: 40px;
+          }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 8s linear infinite;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .safe-top { padding-top: env(safe-area-inset-top); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
       `}} />
 
     </div>
@@ -1007,14 +1436,14 @@ function FooterButton({ icon, label, onClick, active, variant = 'default', disab
     <button 
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center gap-1 w-20 py-1.5 rounded-xl transition-all duration-300 active:scale-90 ${disabled ? 'opacity-20 cursor-not-allowed grayscale' : ''} ${
+      className={`flex flex-col items-center gap-1 w-16 sm:w-20 py-1.5 sm:py-2 rounded-xl transition-all duration-300 active:scale-95 touch-manipulation ${disabled ? 'opacity-20 cursor-not-allowed grayscale' : ''} ${
         active 
           ? variant === 'blue' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : variant === 'red' ? 'bg-red-600 text-white' : 'bg-slate-700 text-white shadow-xl'
           : variant === 'blue' ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 hover:bg-blue-600/20' : 'hover:bg-white/5 text-slate-400'
       }`}
     >
-      <span className="text-xl">{icon}</span>
-      <span className="text-[9px] uppercase font-bold tracking-tighter">{label}</span>
+      <span className="text-lg sm:text-xl">{icon}</span>
+      <span className="text-[7px] sm:text-[9px] uppercase font-black tracking-tighter sm:tracking-tight">{label}</span>
     </button>
   );
 }
