@@ -687,36 +687,61 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Custom Photo Overlay */}
+          {/* Custom Photo Overlay (Broadcaster Identity) */}
           <AnimatePresence>
             {state.isPhotoVisible && state.customPhoto && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className={`absolute z-[110] rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
+                className={`absolute z-[110] rounded-2xl overflow-hidden border-2 shadow-2xl transition-colors ${
+                  !state.isLocked ? 'border-emerald-500 cursor-move ring-4 ring-emerald-500/10' : 'border-white/10 cursor-default'
+                }`}
                 onMouseDown={onMouseDownPhoto}
                 onTouchStart={onMouseDownPhoto}
                 style={{
                   width: `${120 * state.photoScale}px`,
-                  height: `${120 * state.photoScale}px`,
+                  height: `${140 * state.photoScale}px`, // Slightly taller for badge feel
                   left: `${state.photoX}px`,
                   top: `${state.photoY}px`,
-                  touchAction: 'none'
+                  touchAction: 'none',
+                  background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%)'
                 }}
               >
-                <div className="w-full h-full flex items-center justify-center overflow-hidden bg-black/20">
-                  <motion.img 
-                    src={state.customPhoto} 
-                    alt="Custom Overlay" 
-                    className="max-w-none"
-                    style={{
-                      scale: state.photoCropScale,
-                      x: state.photoCropX,
-                      y: state.photoCropY,
-                    }}
-                  />
+                <div className="w-full h-full flex flex-col items-center justify-center overflow-hidden relative">
+                  <div className="flex-1 w-full overflow-hidden flex items-center justify-center bg-black/20 relative">
+                    <motion.img 
+                      src={state.customPhoto} 
+                      alt="Broadcaster" 
+                      className="max-w-none"
+                      style={{
+                        scale: state.photoCropScale,
+                        x: state.photoCropX,
+                        y: state.photoCropY,
+                      }}
+                    />
+                    
+                    {/* Cropping Grid Guide - only visible when configuring (unlocked) */}
+                    {!state.isLocked && (
+                      <div className="absolute inset-0 pointer-events-none border border-emerald-500/30">
+                        <div className="absolute inset-x-0 top-1/3 border-t border-emerald-500/20" />
+                        <div className="absolute inset-x-0 top-2/3 border-t border-emerald-500/20" />
+                        <div className="absolute inset-y-0 left-1/3 border-l border-emerald-500/20" />
+                        <div className="absolute inset-y-0 left-2/3 border-l border-emerald-500/20" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Identity Label */}
+                  <div className="w-full py-1.5 bg-emerald-600 flex items-center justify-center gap-1.5 shrink-0">
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white">LIVE</span>
+                  </div>
                 </div>
+                {!state.isLocked && (
+                  <div className="absolute top-2 right-2 p-1 bg-black/40 rounded-md">
+                     <ImageIcon className="w-2.5 h-2.5 text-white/50" />
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -917,7 +942,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quick Reaction Sounds */}
+                    {/* Sound Library Grid */}
                     <div className="grid grid-cols-2 gap-2">
                       <button 
                         onClick={() => {
@@ -925,21 +950,78 @@ export default function App() {
                           audio.volume = state.stadiumVolume;
                           audio.play();
                         }}
-                        className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 p-2 rounded-xl flex flex-col items-center gap-1 transition-all group"
+                        className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
                       >
-                        <span className="text-[14px] group-active:scale-125 transition-transform">🏏</span>
-                        <span className="text-[8px] font-bold uppercase tracking-widest text-blue-400">Chakka / 6</span>
+                        <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">🏏</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-400 z-10">Chakka / 6</span>
                       </button>
+
                       <button 
                         onClick={() => {
                           const audio = new Audio('https://www.soundjay.com/human/sounds/applause-01.mp3');
                           audio.volume = state.stadiumVolume;
                           audio.play();
                         }}
-                        className="bg-orange-600/10 hover:bg-orange-600/20 border border-orange-500/20 p-2 rounded-xl flex flex-col items-center gap-1 transition-all group"
+                        className="bg-orange-600/10 hover:bg-orange-600/20 border border-orange-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
                       >
-                        <span className="text-[14px] group-active:scale-125 transition-transform">👏</span>
-                        <span className="text-[8px] font-bold uppercase tracking-widest text-orange-400">Choka / 4</span>
+                        <div className="absolute inset-0 bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">👏</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-orange-400 z-10">Choka / 4</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.soundjay.com/human/sounds/ooooh-01.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 bg-red-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">☝️</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-red-400 z-10">Out / Wicket</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.soundjay.com/misc/sounds/wood-crack-1.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">💥</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 z-10">Bat Hit</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                       <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.soundjay.com/misc/sounds/stadium-crowd-1.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">🏟️</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 z-10">Crowd Roar</span>
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          const audio = new Audio('https://www.soundjay.com/misc/sounds/small-bell-ring-01a.mp3');
+                          audio.volume = state.stadiumVolume;
+                          audio.play();
+                        }}
+                        className="bg-slate-600/10 hover:bg-slate-600/20 border border-slate-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
+                      >
+                        <div className="absolute inset-0 bg-slate-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xl group-active:scale-125 transition-transform z-10">🔔</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 z-10">Umpire Bell</span>
                       </button>
                     </div>
                   </div>
@@ -953,6 +1035,23 @@ export default function App() {
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Apna Photo (Identity Overlay)</p>
                     </div>
                     <div className="flex items-center gap-2">
+                       {state.customPhoto && (
+                         <button 
+                           onClick={() => setState(p => ({ 
+                             ...p, 
+                             photoScale: 1, 
+                             photoX: 80, 
+                             photoY: 80,
+                             photoCropScale: 1,
+                             photoCropX: 0,
+                             photoCropY: 0
+                           }))}
+                           className="p-2 bg-white/5 text-slate-500 rounded-xl hover:bg-white/10 transition-all"
+                           title="Reset Photo Transform"
+                         >
+                           <RotateCw className="w-4 h-4" />
+                         </button>
+                       )}
                        {state.customPhoto && (
                          <button 
                            onClick={() => setState(p => ({ ...p, isPhotoVisible: !p.isPhotoVisible }))}
@@ -974,7 +1073,15 @@ export default function App() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Overlay Size</label>
-                          <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.photoScale * 100)}%</span>
+                          <div className="flex items-center gap-2">
+                             <input 
+                              type="number" 
+                              value={Math.round(state.photoScale * 100)}
+                              onChange={(e) => setState(p => ({ ...p, photoScale: Math.max(0.1, parseInt(e.target.value) / 100) }))}
+                              className="w-12 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-1 text-slate-300 outline-none focus:border-purple-500/50"
+                            />
+                            <span className="text-[9px] font-mono font-bold text-slate-500">%</span>
+                          </div>
                         </div>
                         <input 
                           type="range" min="0.1" max="4" step="0.01" 
@@ -984,10 +1091,18 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="space-y-3 pt-2">
+                      <div className="space-y-3 pt-2 border-t border-white/5">
                         <div className="flex items-center justify-between">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Photo Zoom (Crop)</label>
-                          <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.photoCropScale * 100)}%</span>
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Cropping Zoom</label>
+                          <div className="flex items-center gap-2">
+                             <input 
+                              type="number" 
+                              value={Math.round(state.photoCropScale * 100)}
+                              onChange={(e) => setState(p => ({ ...p, photoCropScale: Math.max(1, parseInt(e.target.value) / 100) }))}
+                              className="w-12 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-1 text-slate-300 outline-none focus:border-emerald-500/50"
+                            />
+                            <span className="text-[9px] font-mono font-bold text-slate-500">%</span>
+                          </div>
                         </div>
                         <input 
                           type="range" min="1" max="5" step="0.1" 
@@ -999,7 +1114,15 @@ export default function App() {
 
                       <div className="grid grid-cols-2 gap-4 pt-2">
                         <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Photo X Offset</label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">X Offset</label>
+                            <input 
+                              type="number" 
+                              value={state.photoCropX}
+                              onChange={(e) => setState(p => ({ ...p, photoCropX: parseInt(e.target.value) || 0 }))}
+                              className="w-10 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-0.5 text-slate-300 outline-none"
+                            />
+                          </div>
                           <input 
                             type="range" min="-200" max="200" step="1" 
                             value={state.photoCropX}
@@ -1008,7 +1131,15 @@ export default function App() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Photo Y Offset</label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Y Offset</label>
+                            <input 
+                              type="number" 
+                              value={state.photoCropY}
+                              onChange={(e) => setState(p => ({ ...p, photoCropY: parseInt(e.target.value) || 0 }))}
+                              className="w-10 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-0.5 text-slate-300 outline-none"
+                            />
+                          </div>
                           <input 
                             type="range" min="-200" max="200" step="1" 
                             value={state.photoCropY}
@@ -1020,13 +1151,48 @@ export default function App() {
 
                       <button 
                         onClick={() => setState(p => ({ ...p, customPhoto: null, isPhotoVisible: false }))}
-                        className="w-full py-2 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest text-red-500/60 hover:text-red-500 transition-colors"
+                        className="w-full py-2 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest text-red-500/60 hover:text-red-500 transition-colors border-t border-white/5"
                       >
                         <Trash2 className="w-3 h-3" />
                         Remove Photo
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Face Overlay Configuration */}
+                <div className="border-t border-white/5 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-blue-400" />
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Face Overlay (Camera)</p>
+                    </div>
+                    {state.isCamVisible && (
+                      <button 
+                        onClick={() => setState(p => ({ ...p, camScale: 1, camX: 50, camY: 50 }))}
+                        className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 transition-colors flex items-center gap-1.5"
+                        title="Reset Camera"
+                      >
+                         <span className="text-[8px] font-bold uppercase">Reset</span>
+                         <RotateCw className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-4 bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Camera Size (Scale)</label>
+                        <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.camScale * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" min="0.1" max="4" step="0.01" 
+                        value={state.camScale}
+                        onChange={(e) => setState(p => ({ ...p, camScale: parseFloat(e.target.value) }))}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                    <p className="text-[8px] text-slate-600 font-medium">Tip: Drag the camera bubble on the main screen to move it.</p>
+                  </div>
                 </div>
 
                 {/* Reset Section */}
@@ -1042,12 +1208,18 @@ export default function App() {
                       rotation: 0,
                       camScale: 1,
                       camX: 50,
-                      camY: 50
+                      camY: 50,
+                      photoScale: 0.8,
+                      photoX: 40,
+                      photoY: 400,
+                      photoCropScale: 1.2,
+                      photoCropX: 0,
+                      photoCropY: 0
                     }))}
-                    className="w-full py-4 border border-white/5 hover:bg-white/5 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-400 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-4 border border-white/5 hover:bg-emerald-600/10 hover:text-emerald-400 hover:border-emerald-500/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-400 transition-all flex items-center justify-center gap-2"
                   >
                     <RotateCw className="w-4 h-4" />
-                    Reset All Transforms
+                    Reset All View Transforms
                   </button>
                 </div>
 
