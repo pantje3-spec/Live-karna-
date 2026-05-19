@@ -61,6 +61,9 @@ interface StreamState {
   cropOffsetY: number;
   isCropping: boolean;
   isSplashed: boolean;
+  webZoom: number;
+  isAspectLocked: boolean;
+  rotation: number;
   // Face Overlay
   isCamVisible: boolean;
   camScale: number;
@@ -93,6 +96,9 @@ export default function App() {
     cropOffsetY: 0,
     isCropping: false,
     isSplashed: true,
+    webZoom: 1,
+    isAspectLocked: false,
+    rotation: 0,
     isCamVisible: false,
     camScale: 1,
     camX: 50,
@@ -259,21 +265,34 @@ export default function App() {
       </AnimatePresence>
 
       {/* Capture Area (The Iframe) */}
-      <main className="flex-1 relative overflow-hidden group">
-        <div 
-          className="absolute inset-0 transition-transform duration-300"
-          style={{
-            transform: `scale(${state.cropScale}) translate(${state.cropOffsetX}px, ${state.cropOffsetY}px)`,
-            transformOrigin: 'center center'
-          }}
-        >
-          <iframe 
-            ref={iframeRef}
-            src={activeTab.url}
-            className={`w-full h-full border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
-            title="Stream View"
-          />
-        </div>
+      <main className="flex-1 relative overflow-hidden group flex items-center justify-center bg-black/10">
+          <div 
+            className={`relative transition-all duration-500 shadow-2xl overflow-hidden ${state.isAspectLocked ? 'aspect-video w-full max-w-7xl' : 'w-full h-full'}`}
+            style={{
+              backgroundColor: state.canvasBg
+            }}
+          >
+            <div 
+              className="absolute inset-0 transition-transform duration-300"
+              style={{
+                transform: `scale(${state.cropScale}) translate(${state.cropOffsetX}px, ${state.cropOffsetY}px) rotate(${state.rotation}deg)`,
+                transformOrigin: 'center center'
+              }}
+            >
+              <iframe 
+                ref={iframeRef}
+                src={activeTab.url}
+                style={{
+                  width: `${100 / state.webZoom}%`,
+                  height: `${100 / state.webZoom}%`,
+                  transform: `scale(${state.webZoom})`,
+                  transformOrigin: '0 0'
+                }}
+                className={`border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
+                title="Stream View"
+              />
+            </div>
+          </div>
 
         {/* Edit Mode Helpers */}
         {state.isCropping && !state.isLocked && (
@@ -468,6 +487,28 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Reset Section */}
+                <div className="border-t border-white/5 pt-6">
+                  <button 
+                    onClick={() => setState(p => ({ 
+                      ...p, 
+                      cropScale: 1, 
+                      cropOffsetX: 0, 
+                      cropOffsetY: 0, 
+                      webZoom: 1,
+                      isAspectLocked: false,
+                      rotation: 0,
+                      camScale: 1,
+                      camX: 50,
+                      camY: 50
+                    }))}
+                    className="w-full py-4 border border-white/5 hover:bg-white/5 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-400 transition-all flex items-center justify-center gap-2"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                    Reset All Transforms
+                  </button>
+                </div>
+
                 {/* Canvas Theme */}
                 <div className="border-t border-white/5 pt-6 text-center">
                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Studio Theme</p>
@@ -503,6 +544,43 @@ export default function App() {
             exit={{ x: 200, opacity: 0 }}
             className="fixed right-6 top-1/2 -translate-y-1/2 z-[500] w-20 bg-[#1A1B1E]/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-3 flex flex-col items-center gap-4 shadow-2xl"
           >
+             <button 
+               title="Reset Crop Zoom & Position" 
+               onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0 }))} 
+               className="tool-btn flex flex-col items-center gap-1 py-3 group border-blue-500/30 bg-blue-500/5 w-full"
+             >
+               <RotateCw className="w-4 h-4 text-blue-500 group-hover:rotate-180 transition-transform duration-500" />
+               <span className="text-[7px] font-black uppercase tracking-tighter text-blue-400">Reset Crop</span>
+             </button>
+
+             <div className="h-px w-8 bg-white/10" />
+
+             <div className="flex flex-col items-center gap-2">
+               <button 
+                 onClick={() => setState(p => ({ ...p, isAspectLocked: !p.isAspectLocked }))}
+                 className={`tool-btn flex flex-col items-center gap-1 py-2 ${state.isAspectLocked ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : ''}`}
+                 title="Toggle 16:9 Aspect Lock"
+               >
+                 <Monitor className={`w-4 h-4 ${state.isAspectLocked ? 'text-blue-400' : 'text-slate-500'}`} />
+                 <span className="text-[7px] font-black uppercase tracking-tighter">16:9 Lock</span>
+               </button>
+             </div>
+
+             <div className="h-px w-8 bg-white/10" />
+
+             <div className="flex flex-col items-center gap-2">
+               <button 
+                 onClick={() => setState(p => ({ ...p, rotation: (p.rotation + 90) % 360 }))}
+                 className="tool-btn flex flex-col items-center gap-1 py-2"
+                 title="Rotate 90°"
+               >
+                 <RotateCw className="w-4 h-4 text-blue-400" />
+                 <span className="text-[7px] font-black uppercase tracking-tighter">Rotate</span>
+               </button>
+             </div>
+
+             <div className="h-px w-8 bg-white/10" />
+
              <div className="flex flex-col items-center gap-1">
                 <button onClick={() => adjustCrop('y', 50)} className="tool-btn"><ArrowLeft className="rotate-90 w-4 h-4" /></button>
                 <div className="flex gap-1">
@@ -512,34 +590,59 @@ export default function App() {
                 <button onClick={() => adjustCrop('y', -50)} className="tool-btn"><ArrowRight className="rotate-90 w-4 h-4" /></button>
              </div>
              
-             <div className="h-px w-8 bg-white/10" />
-             
              <div className="flex flex-col items-center gap-2">
-               <button onClick={() => adjustCrop('scale', 0.2)} className="tool-btn"><Plus className="w-4 h-4 text-blue-500" /></button>
-               
-               <div className="h-32 flex items-center justify-center py-2">
-                 <input 
-                   type="range"
-                   min="0.5"
-                   max="5"
-                   step="0.05"
-                   value={state.cropScale}
-                   onChange={(e) => setState(p => ({ ...p, cropScale: parseFloat(e.target.value) }))}
-                   className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 -rotate-90"
-                 />
+               <div className="flex gap-1">
+                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, p.webZoom + 0.01) }))} className="tool-btn p-1.5"><Plus className="w-3.5 h-3.5" /></button>
+                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, p.webZoom - 0.01) }))} className="tool-btn p-1.5"><Minus className="w-3.5 h-3.5" /></button>
                </div>
-
-               <div className="flex flex-col items-center py-1">
-                 <span className="text-[10px] font-mono font-black text-blue-400">{(state.cropScale * 100).toFixed(0)}%</span>
-                 <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Zoom</span>
-               </div>
-
-               <button onClick={() => adjustCrop('scale', -0.2)} className="tool-btn"><Minus className="w-4 h-4 text-blue-500" /></button>
+               <button 
+                 onClick={() => setState(p => ({ ...p, webZoom: 1 }))}
+                 className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                 title="Reset Content Zoom"
+               >
+                 <span className="text-[10px] font-mono font-black text-emerald-400">{(state.webZoom * 100).toFixed(0)}%</span>
+                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Content Mag</span>
+               </button>
              </div>
 
              <div className="h-px w-8 bg-white/10" />
+
+             <div className="flex flex-col items-center gap-2">
+                <button onClick={() => adjustCrop('scale', 0.01)} className="tool-btn"><Plus className="w-4 h-4 text-blue-500" /></button>
+                
+                <div className="h-32 flex items-center justify-center py-2">
+                  <input 
+                    type="range"
+                    min="0.1"
+                    max="5"
+                    step="0.01"
+                    value={state.cropScale}
+                    onChange={(e) => setState(p => ({ ...p, cropScale: parseFloat(e.target.value) }))}
+                    className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 -rotate-90"
+                  />
+                </div>
+
+                <button 
+                  onClick={() => setState(p => ({ ...p, cropScale: 1 }))}
+                  className="flex flex-col items-center py-1 hover:opacity-80 transition-opacity"
+                  title="Reset Window Zoom"
+                >
+                  <span className="text-[10px] font-mono font-black text-blue-400">{(state.cropScale * 100).toFixed(0)}%</span>
+                  <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Zoom</span>
+                </button>
+
+                <button onClick={() => adjustCrop('scale', -0.01)} className="tool-btn"><Minus className="w-4 h-4 text-blue-500" /></button>
+              </div>
+
+             <div className="h-px w-8 bg-white/10" />
              
-             <button title="Reset Transform" onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0 }))} className="tool-btn"><RotateCw className="w-4 h-4 text-slate-500" /></button>
+             <button 
+               title="Reset All Browser Transforms" 
+               onClick={() => setState(p => ({ ...p, cropScale: 1, cropOffsetX: 0, cropOffsetY: 0, webZoom: 1, isAspectLocked: false, rotation: 0 }))} 
+               className="tool-btn mt-2 opacity-50 hover:opacity-100"
+             >
+               <Maximize className="w-4 h-4 text-slate-500" />
+             </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -555,7 +658,7 @@ export default function App() {
           >
              <div className="flex flex-col items-center gap-3">
                <button 
-                 onClick={() => setState(p => ({ ...p, camScale: Math.min(3, parseFloat((p.camScale + 0.1).toFixed(1))) }))} 
+                 onClick={() => setState(p => ({ ...p, camScale: Math.min(3, parseFloat((p.camScale + 0.01).toFixed(2))) }))} 
                  className="tool-btn"
                >
                  <Plus className="w-4 h-4 text-emerald-500" />
@@ -564,9 +667,9 @@ export default function App() {
                <div className="h-32 flex items-center justify-center py-4">
                  <input 
                    type="range"
-                   min="0.5"
+                   min="0.1"
                    max="3"
-                   step="0.1"
+                   step="0.01"
                    value={state.camScale}
                    onChange={(e) => setState(p => ({ ...p, camScale: parseFloat(e.target.value) }))}
                    className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 -rotate-90"
@@ -574,7 +677,7 @@ export default function App() {
                </div>
 
                <button 
-                 onClick={() => setState(p => ({ ...p, camScale: Math.max(0.5, parseFloat((p.camScale - 0.1).toFixed(1))) }))} 
+                 onClick={() => setState(p => ({ ...p, camScale: Math.max(0.1, parseFloat((p.camScale - 0.01).toFixed(2))) }))} 
                  className="tool-btn"
                >
                  <Minus className="w-4 h-4 text-red-500" />
@@ -582,7 +685,7 @@ export default function App() {
              </div>
 
              <div className="flex flex-col items-center gap-1">
-               <span className="text-[10px] font-mono font-black text-blue-400">{state.camScale.toFixed(1)}x</span>
+               <span className="text-[10px] font-mono font-black text-blue-400">{state.camScale.toFixed(2)}x</span>
                <div className="h-px w-8 bg-white/10" />
                <button 
                  onClick={() => setState(p => ({ ...p, camX: 50, camY: 50, camScale: 1 }))} 
@@ -609,7 +712,7 @@ export default function App() {
   function adjustCrop(axis: 'scale' | 'x' | 'y', val: number) {
     setState(prev => ({
       ...prev,
-      cropScale: axis === 'scale' ? Math.max(0.5, prev.cropScale + val) : prev.cropScale,
+      cropScale: axis === 'scale' ? Math.max(0.1, prev.cropScale + val) : prev.cropScale,
       cropOffsetX: axis === 'x' ? prev.cropOffsetX + val : prev.cropOffsetX,
       cropOffsetY: axis === 'y' ? prev.cropOffsetY + val : prev.cropOffsetY,
     }));
