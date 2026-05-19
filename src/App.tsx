@@ -26,6 +26,8 @@ import {
   Minus,
   X,
   User,
+  Save,
+  Trash2,
   Camera,
   Circle,
   Video,
@@ -34,6 +36,7 @@ import {
   Activity,
   Search,
   Monitor,
+  ExternalLink,
   Volume2,
   Play,
   Pause
@@ -46,6 +49,18 @@ interface Tab {
   url: string;
   title: string;
   icon: string;
+}
+
+interface StreamPreset {
+  id: string;
+  name: string;
+  url: string;
+  cropScale: number;
+  cropOffsetX: number;
+  cropOffsetY: number;
+  webZoom: number;
+  rotation: number;
+  isAspectLocked: boolean;
 }
 
 interface StreamState {
@@ -64,6 +79,7 @@ interface StreamState {
   webZoom: number;
   isAspectLocked: boolean;
   rotation: number;
+  camError: string | null;
   // Face Overlay
   isCamVisible: boolean;
   camScale: number;
@@ -99,6 +115,7 @@ export default function App() {
     webZoom: 1,
     isAspectLocked: false,
     rotation: 0,
+    camError: null,
     isCamVisible: false,
     camScale: 1,
     camX: 50,
@@ -112,6 +129,125 @@ export default function App() {
   const [speed, setSpeed] = useState<string>('10.0');
   const [showUrlBar, setShowUrlBar] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [presets, setPresets] = useState<StreamPreset[]>([]);
+  const [isPiPActive, setIsPiPActive] = useState(false);
+  const pipWindowRef = useRef<any>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('stream_presets');
+    if (saved) {
+      try {
+        setPresets(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load presets", e);
+      }
+    }
+  }, []);
+
+  const savePreset = () => {
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
+    const name = prompt("Enter a name for this preset:", new URL(activeTab.url).hostname) || 'Untitled Preset';
+    
+    const newPreset: StreamPreset = {
+      id: Date.now().toString(),
+      name,
+      url: activeTab.url,
+      cropScale: state.cropScale,
+      cropOffsetX: state.cropOffsetX,
+      cropOffsetY: state.cropOffsetY,
+      webZoom: state.webZoom,
+      rotation: state.rotation,
+      isAspectLocked: state.isAspectLocked
+    };
+
+    const updated = [...presets, newPreset];
+    setPresets(updated);
+    localStorage.setItem('stream_presets', JSON.stringify(updated));
+  };
+
+  const togglePiP = async () => {
+    if (isPiPActive) {
+      pipWindowRef.current?.close();
+      return;
+    }
+
+    if (!('documentPictureInPicture' in window)) {
+      alert("Document Picture-in-Picture is not supported in your browser (Requires Chrome 111+ or Edge 111+).");
+      return;
+    }
+
+    try {
+      const pip = (window as any).documentPictureInPicture;
+      const pipWindow = await pip.requestWindow({
+        width: 1024,
+        height: 576,
+      });
+
+      pipWindowRef.current = pipWindow;
+
+      // Copy styles to PiP window
+      [...document.styleSheets].forEach((styleSheet) => {
+        try {
+          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+          const style = document.createElement('style');
+          style.textContent = cssRules;
+          pipWindow.document.head.appendChild(style);
+        } catch (e) {
+          const link = document.createElement('link');
+          if (styleSheet.href) {
+            link.rel = 'stylesheet';
+            link.href = styleSheet.href;
+            pipWindow.document.head.appendChild(link);
+          }
+        }
+      });
+
+      // Move the capture area container to the PiP window
+      const container = containerRef.current;
+      if (container) {
+        pipWindow.document.body.appendChild(container);
+        pipWindow.document.body.style.margin = '0';
+        pipWindow.document.body.style.backgroundColor = state.canvasBg;
+        pipWindow.document.body.style.overflow = 'hidden';
+        setIsPiPActive(true);
+      }
+
+      pipWindow.addEventListener('pagehide', () => {
+        setIsPiPActive(false);
+        pipWindowRef.current = null;
+        
+        // Move back to main window
+        const placeholder = document.getElementById('pip-placeholder');
+        if (placeholder && container) {
+          placeholder.replaceWith(container);
+        }
+      }, { once: true });
+
+    } catch (err) {
+      console.error("PiP Error:", err);
+    }
+  };
+
+  const loadPreset = (preset: StreamPreset) => {
+    setState(p => ({
+      ...p,
+      cropScale: preset.cropScale,
+      cropOffsetX: preset.cropOffsetX,
+      cropOffsetY: preset.cropOffsetY,
+      webZoom: preset.webZoom,
+      rotation: preset.rotation,
+      isAspectLocked: preset.isAspectLocked,
+      tabs: p.tabs.map(t => t.id === p.activeTabId ? { ...t, url: preset.url } : t)
+    }));
+    setShowUrlBar(false);
+  };
+
+  const deletePreset = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = presets.filter(p => p.id !== id);
+    setPresets(updated);
+    localStorage.setItem('stream_presets', JSON.stringify(updated));
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -137,16 +273,34 @@ export default function App() {
   
   // Camera Stream
   useEffect(() => {
+    let currentStream: MediaStream | null = null;
+
     if (state.isCamVisible) {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
-          if (videoRef.current) videoRef.current.srcObject = stream;
+          currentStream = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          setState(p => ({ ...p, camError: null }));
         })
-        .catch(err => console.error("Camera error:", err));
-    } else {
-      const stream = videoRef.current?.srcObject as MediaStream;
-      stream?.getTracks().forEach(track => track.stop());
+        .catch(err => {
+          console.error("Camera error:", err);
+          setState(p => ({ 
+            ...p, 
+            camError: err.name === 'NotAllowedError' || err.message?.includes('denied') 
+              ? 'CAMERA_DENIED' 
+              : err.message || 'Unknown camera error',
+            isCamVisible: false 
+          }));
+        });
     }
+
+    return () => {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, [state.isCamVisible]);
   
   // Splash Screen
@@ -264,96 +418,152 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Capture Area (The Iframe) */}
-      <main className="flex-1 relative overflow-hidden group flex items-center justify-center bg-black/10">
-          <div 
-            className={`relative transition-all duration-500 shadow-2xl overflow-hidden ${state.isAspectLocked ? 'aspect-video w-full max-w-7xl' : 'w-full h-full'}`}
-            style={{
-              backgroundColor: state.canvasBg
-            }}
+      {/* Camera Error Modal */}
+      <AnimatePresence>
+        {state.camError && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[2000] w-full max-w-xs"
           >
+            <div className="bg-red-500/90 backdrop-blur-xl border border-red-400/50 rounded-2xl p-4 shadow-2xl overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-1 h-full bg-white/40" />
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-white/70">Security Alert</h3>
+                  <p className="text-xs font-bold text-white mt-1 leading-tight">
+                    {state.camError === 'CAMERA_DENIED' 
+                      ? "Camera access was denied. Please click the Lock icon in your browser's address bar and 'Allow' camera access." 
+                      : `Camera Error: ${state.camError}`}
+                  </p>
+                  <button 
+                    onClick={() => setState(p => ({ ...p, camError: null }))}
+                    className="mt-3 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest text-white transition-all active:scale-95"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Capture Area (The Iframe) */}
+       {isPiPActive ? (
+         <div id="pip-placeholder" className="flex-1 flex flex-col items-center justify-center bg-black/20 italic text-slate-500 text-sm gap-4 transition-all animate-pulse">
+            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <ExternalLink className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Studio Mode: Active</p>
+              <p className="mt-1">Stream popped out to PiP Window</p>
+            </div>
+            <button 
+              onClick={togglePiP}
+              className="mt-2 px-4 py-2 bg-blue-600/20 text-blue-400 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600/30 transition-all"
+            >
+              Return to Studio
+            </button>
+         </div>
+       ) : (
+         <main 
+           ref={containerRef}
+           className="flex-1 relative overflow-hidden group flex items-center justify-center bg-black/10 h-full w-full"
+         >
             <div 
-              className="absolute inset-0 transition-transform duration-300"
+              className={`relative transition-all duration-500 shadow-2xl overflow-hidden ${state.isAspectLocked ? 'aspect-video w-full max-w-7xl' : 'w-full h-full'}`}
               style={{
-                transform: `scale(${state.cropScale}) translate(${state.cropOffsetX}px, ${state.cropOffsetY}px) rotate(${state.rotation}deg)`,
-                transformOrigin: 'center center'
+                backgroundColor: state.canvasBg
               }}
             >
-              <iframe 
-                ref={iframeRef}
-                src={activeTab.url}
+              <div 
+                className="absolute inset-0 transition-transform duration-300"
                 style={{
-                  width: `${100 / state.webZoom}%`,
-                  height: `${100 / state.webZoom}%`,
-                  transform: `scale(${state.webZoom})`,
-                  transformOrigin: '0 0'
+                  transform: `scale(${state.cropScale}) translate(${state.cropOffsetX}px, ${state.cropOffsetY}px) rotate(${state.rotation}deg)`,
+                  transformOrigin: 'center center'
                 }}
-                className={`border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
-                title="Stream View"
-              />
+              >
+                <iframe 
+                  ref={iframeRef}
+                  src={activeTab.url}
+                  style={{
+                    width: `${100 / state.webZoom}%`,
+                    height: `${100 / state.webZoom}%`,
+                    transform: `scale(${state.webZoom})`,
+                    transformOrigin: '0 0'
+                  }}
+                  className={`border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
+                  title="Stream View"
+                />
+              </div>
             </div>
-          </div>
-
-        {/* Edit Mode Helpers */}
-        {state.isCropping && !state.isLocked && (
-          <div 
-            className="absolute inset-0 z-[60] cursor-move bg-blue-500/5 border-2 border-dashed border-blue-500/20 pointer-events-auto"
-            onMouseDown={onMouseDown}
-            onTouchStart={onMouseDown}
-          />
-        )}
-
-        {/* Lock Overlay */}
-        {state.isLocked && (
-          <div className="absolute inset-0 z-[70] bg-transparent" />
-        )}
-
-        {/* Face Overlay Layer */}
-        <AnimatePresence>
-          {state.isCamVisible && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className={`absolute z-[100] bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
-              onMouseDown={onMouseDownCam}
-              onTouchStart={onMouseDownCam}
-              style={{
-                width: `${140 * state.camScale}px`,
-                height: `${140 * state.camScale}px`,
-                left: `${state.camX}px`, 
-                top: `${state.camY}px`,
-                touchAction: 'none'
-              }}
-            >
-              <video 
-                ref={videoRef}
-                autoPlay 
-                playsInline 
-                muted 
-                className="w-full h-full object-cover -scale-x-100"
-              />
-            </motion.div>
+  
+          {/* Edit Mode Helpers */}
+          {state.isCropping && !state.isLocked && (
+            <div 
+              className="absolute inset-0 z-[60] cursor-move bg-blue-500/5 border-2 border-dashed border-blue-500/20 pointer-events-auto"
+              onMouseDown={onMouseDown}
+              onTouchStart={onMouseDown}
+            />
           )}
-        </AnimatePresence>
-
-        {/* Static Info Layer (Hidden in Fullscreen) */}
-        {!state.isFullscreen && !state.isLocked && (
-          <div className="absolute top-4 left-4 z-[90] pointer-events-none">
-            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 flex items-center gap-3">
-              <div className="flex items-center gap-1 text-emerald-400">
-                <Wifi className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-mono font-bold leading-none">{speed} Mbps</span>
-              </div>
-              <div className="w-px h-3 bg-white/10" />
-              <div className="flex items-center gap-1 text-blue-400">
-                <Layout className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-bold uppercase tracking-tighter leading-none">Studio</span>
+  
+          {/* Lock Overlay */}
+          {state.isLocked && (
+            <div className="absolute inset-0 z-[70] bg-transparent" />
+          )}
+  
+          {/* Face Overlay Layer */}
+          <AnimatePresence>
+            {state.isCamVisible && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className={`absolute z-[100] bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
+                onMouseDown={onMouseDownCam}
+                onTouchStart={onMouseDownCam}
+                style={{
+                  width: `${140 * state.camScale}px`,
+                  height: `${140 * state.camScale}px`,
+                  left: `${state.camX}px`, 
+                  top: `${state.camY}px`,
+                  touchAction: 'none'
+                }}
+              >
+                <video 
+                  ref={videoRef}
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+  
+          {/* Static Info Layer (Hidden in Fullscreen) */}
+          {!state.isFullscreen && !state.isLocked && (
+            <div className="absolute top-4 left-4 z-[90] pointer-events-none">
+              <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 flex items-center gap-3">
+                <div className="flex items-center gap-1 text-emerald-400">
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-mono font-bold leading-none">{speed} Mbps</span>
+                </div>
+                <div className="w-px h-3 bg-white/10" />
+                <div className="flex items-center gap-1 text-blue-400">
+                  <Layout className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter leading-none">Studio</span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      )}
 
       {/* --- Controls Footer (The 4 Main Buttons) --- */}
       <AnimatePresence>
@@ -369,6 +579,13 @@ export default function App() {
               label="Fullscreen" 
               onClick={toggleFullscreen}
               active={state.isFullscreen}
+            />
+            <FooterButton 
+              icon={<ExternalLink className="w-5 h-5" />} 
+              label="PiP Mode" 
+              onClick={togglePiP}
+              active={isPiPActive}
+              variant="blue"
             />
             <FooterButton 
               icon={<Crop className="w-5 h-5" />} 
@@ -509,6 +726,56 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Presets Manager */}
+                <div className="border-t border-white/5 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Save className="w-4 h-4 text-emerald-400" />
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Saved Presets</p>
+                    </div>
+                    <button 
+                      onClick={savePreset}
+                      className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-emerald-600/30 transition-colors"
+                    >
+                      Save Current
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1 no-scrollbar">
+                    {presets.length === 0 && (
+                      <div className="bg-white/5 border border-dashed border-white/10 rounded-2xl p-4 text-center">
+                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">No presets saved yet</p>
+                      </div>
+                    )}
+                    {presets.map(p => (
+                      <div 
+                        key={p.id}
+                        onClick={() => loadPreset(p)}
+                        className="group relative bg-white/5 border border-white/5 hover:border-blue-500/30 hover:bg-white/10 rounded-2xl p-3 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-[11px] font-bold text-white truncate w-32">{p.name}</h4>
+                            <p className="text-[8px] text-slate-500 truncate w-32">{p.url}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <div className="flex flex-col items-end">
+                                <span className="text-[7px] font-mono text-blue-400">Scale: {p.cropScale.toFixed(2)}x</span>
+                                <span className="text-[7px] font-mono text-emerald-400">Zoom: {p.webZoom.toFixed(2)}x</span>
+                             </div>
+                             <button 
+                               onClick={(e) => deletePreset(p.id, e)}
+                               className="p-1.5 bg-red-500/10 text-red-500 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20"
+                             >
+                               <X className="w-3 h-3" />
+                             </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Canvas Theme */}
                 <div className="border-t border-white/5 pt-6 text-center">
                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Studio Theme</p>
@@ -575,8 +842,16 @@ export default function App() {
                  title="Rotate 90°"
                >
                  <RotateCw className="w-4 h-4 text-blue-400" />
-                 <span className="text-[7px] font-black uppercase tracking-tighter">Rotate</span>
                </button>
+               <div className="flex flex-col items-center">
+                 <input 
+                   type="number" 
+                   value={state.rotation} 
+                   onChange={(e) => setState(p => ({ ...p, rotation: parseInt(e.target.value) || 0 }))}
+                   className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-orange-400 font-mono text-center focus:border-orange-500/50 outline-none"
+                 />
+                 <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 mt-1">Deg°</span>
+               </div>
              </div>
 
              <div className="h-px w-8 bg-white/10" />
@@ -595,14 +870,18 @@ export default function App() {
                  <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, p.webZoom + 0.01) }))} className="tool-btn p-1.5"><Plus className="w-3.5 h-3.5" /></button>
                  <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, p.webZoom - 0.01) }))} className="tool-btn p-1.5"><Minus className="w-3.5 h-3.5" /></button>
                </div>
-               <button 
-                 onClick={() => setState(p => ({ ...p, webZoom: 1 }))}
-                 className="flex flex-col items-center hover:opacity-80 transition-opacity"
-                 title="Reset Content Zoom"
-               >
-                 <span className="text-[10px] font-mono font-black text-emerald-400">{(state.webZoom * 100).toFixed(0)}%</span>
-                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Content Mag</span>
-               </button>
+               <div className="flex flex-col items-center">
+                 <input 
+                   type="number" 
+                   step="0.01"
+                   min="0.1"
+                   max="3"
+                   value={state.webZoom.toFixed(2)} 
+                   onChange={(e) => setState(p => ({ ...p, webZoom: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
+                   className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-emerald-400 font-mono text-center focus:border-emerald-500/50 outline-none"
+                 />
+                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter mt-1">Content Mag</span>
+               </div>
              </div>
 
              <div className="h-px w-8 bg-white/10" />
@@ -622,14 +901,18 @@ export default function App() {
                   />
                 </div>
 
-                <button 
-                  onClick={() => setState(p => ({ ...p, cropScale: 1 }))}
-                  className="flex flex-col items-center py-1 hover:opacity-80 transition-opacity"
-                  title="Reset Window Zoom"
-                >
-                  <span className="text-[10px] font-mono font-black text-blue-400">{(state.cropScale * 100).toFixed(0)}%</span>
-                  <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Zoom</span>
-                </button>
+                <div className="flex flex-col items-center py-1">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0.1"
+                    max="5"
+                    value={state.cropScale.toFixed(2)} 
+                    onChange={(e) => setState(p => ({ ...p, cropScale: Math.max(0.1, Math.min(5, parseFloat(e.target.value) || 1)) }))}
+                    className="w-12 bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[8px] text-blue-400 font-mono text-center focus:border-blue-500/50 outline-none"
+                  />
+                  <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter mt-1">Zoom</span>
+                </div>
 
                 <button onClick={() => adjustCrop('scale', -0.01)} className="tool-btn"><Minus className="w-4 h-4 text-blue-500" /></button>
               </div>
