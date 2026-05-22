@@ -115,11 +115,19 @@ interface StreamState {
   photoCropX: number;
   photoCropY: number;
   photoCropScale: number;
+  musicUrl: string;
 }
 
 const DEFAULT_TABS: Tab[] = [
   { id: '1', url: '', title: 'Cricket Score', icon: '🏏' },
 ];
+
+function getYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
 
 export default function App() {
   // --- State ---
@@ -149,6 +157,7 @@ export default function App() {
     bgImage: 'https://res.cloudinary.com/dm5spjnjk/image/upload/v1779169345/chennai-new-1710336746475-compressed_dlgwid.jpg',
     isMusicPlaying: false,
     musicVolume: 0.5,
+    musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
     isStadiumSoundPlaying: false,
     stadiumVolume: 0.5,
     customPhoto: null,
@@ -230,10 +239,13 @@ export default function App() {
   }, [state.isLocked, toggleFullscreen]);
 
   // Background Music
+  const youtubeId = getYouTubeId(state.musicUrl);
+  const isYouTubeMusic = !!youtubeId;
+
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = state.musicVolume;
-      if (state.isMusicPlaying) {
+      if (state.isMusicPlaying && !isYouTubeMusic) {
         audioRef.current.play().catch(() => {
           console.log("Interaction required for audio");
           setState(p => ({ ...p, isMusicPlaying: false }));
@@ -242,7 +254,7 @@ export default function App() {
         audioRef.current.pause();
       }
     }
-  }, [state.isMusicPlaying, state.musicVolume]);
+  }, [state.isMusicPlaying, state.musicVolume, isYouTubeMusic, state.musicUrl]);
 
   // Stadium Sound
   useEffect(() => {
@@ -414,9 +426,18 @@ export default function App() {
 
       <audio 
         ref={audioRef}
-        src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" 
+        src={isYouTubeMusic ? undefined : (state.musicUrl || undefined)} 
         loop
       />
+      {state.isMusicPlaying && isYouTubeMusic && youtubeId && (
+        <iframe
+          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=0&loop=1&playlist=${youtubeId}&enablejsapi=1`}
+          className="hidden"
+          allow="autoplay"
+          title="Background Music YouTube Player"
+          key={youtubeId}
+        />
+      )}
       <audio 
         ref={stadiumRef}
         src="https://www.soundjay.com/misc/sounds/stadium-crowd-1.mp3" 
@@ -751,7 +772,8 @@ export default function App() {
                       {state.isMusicPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-3 bg-black/40 p-3 rounded-2xl border border-white/5">
+
+                  <div className="flex items-center gap-3 bg-black/40 p-3 rounded-2xl border border-white/5 mb-4">
                     <Volume2 className="w-3.5 h-3.5 text-slate-600" />
                     <input 
                       type="range"
@@ -763,6 +785,88 @@ export default function App() {
                       className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     <span className="text-[10px] font-mono font-bold text-slate-500 w-8">{Math.round(state.musicVolume * 100)}%</span>
+                  </div>
+
+                  {/* Preset Music Quick Selection */}
+                  <div className="space-y-2 mb-4">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Quick Tracks</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', isMusicPlaying: true }))}
+                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
+                          state.musicUrl === 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' 
+                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
+                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="truncate font-bold">🎵 Classic Sports</div>
+                        <div className="text-[8px] opacity-60">Direct MP3</div>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', isMusicPlaying: true }))}
+                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
+                          state.musicUrl === 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3' 
+                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
+                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="truncate font-bold">🏏 Stadium Hype</div>
+                        <div className="text-[8px] opacity-60">Direct MP3</div>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', isMusicPlaying: true }))}
+                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
+                          state.musicUrl === 'https://www.youtube.com/watch?v=jfKfPfyJRdk' 
+                            ? 'bg-emerald-600/10 border-emerald-500/40 text-emerald-400' 
+                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="truncate font-bold">🏮 Lofi Chill Live</div>
+                        <div className="text-[8px] opacity-60">YouTube Stream</div>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.youtube.com/watch?v=5qmYV7P9Zco', isMusicPlaying: true }))}
+                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
+                          state.musicUrl === 'https://www.youtube.com/watch?v=5qmYV7P9Zco' 
+                            ? 'bg-emerald-600/10 border-emerald-500/40 text-emerald-400' 
+                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="truncate font-bold">⚡ Gaming Synth</div>
+                        <div className="text-[8px] opacity-60">YouTube Mix</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom URL Input */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block w-full truncate">Custom link (YouTube / MP3)</label>
+                      <div className="shrink-0">
+                        {isYouTubeMusic ? (
+                          <span className="text-[8px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold">YOUTUBE MODE</span>
+                        ) : (
+                          <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-mono font-bold">MP3 MODE</span>
+                        )}
+                      </div>
+                    </div>
+                    <input 
+                      type="text"
+                      value={state.musicUrl}
+                      onChange={(e) => setState(p => ({ ...p, musicUrl: e.target.value }))}
+                      placeholder="Paste YouTube video link or direct MP3 stream URL..."
+                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-blue-500/40"
+                    />
+                    <p className="text-[8px] text-slate-500 leading-normal">
+                      🎵 Paste any standard MP3 audio link or paste any YouTube live stream / music video link to play it dynamically in the background during live session overlays.
+                    </p>
                   </div>
                 </div>
 
@@ -1087,7 +1191,7 @@ export default function App() {
               <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
               <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
-                <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, parseFloat((p.webZoom + 0.05).toFixed(2))) }))} className="tool-btn">
+                <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, parseFloat((p.webZoom + 0.01).toFixed(2))) }))} className="tool-btn">
                   <Plus className="w-4 h-4 text-emerald-400" />
                 </button>
 
@@ -1116,7 +1220,7 @@ export default function App() {
                   <span className="text-[7px] sm:text-[8px] font-bold text-slate-600 uppercase tracking-tighter mt-1">Mag</span>
                 </div>
 
-                <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, parseFloat((p.webZoom - 0.05).toFixed(2))) }))} className="tool-btn">
+                <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, parseFloat((p.webZoom - 0.01).toFixed(2))) }))} className="tool-btn">
                   <Minus className="w-4 h-4 text-emerald-400" />
                 </button>
               </div>
