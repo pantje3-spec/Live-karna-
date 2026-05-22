@@ -26,12 +26,10 @@ import {
   Minus,
   X,
   User,
-  Save,
   Trash2,
   Camera,
   Circle,
   Video,
-  Download,
   Shield,
   Activity,
   Search,
@@ -70,6 +68,7 @@ interface StreamPreset {
   isCamVisible: boolean;
   customPhoto: string | null;
   isPhotoVisible: boolean;
+  isStreamVisible: boolean;
   photoScale: number;
   photoX: number;
   photoY: number;
@@ -109,6 +108,7 @@ interface StreamState {
   stadiumVolume: number;
   customPhoto: string | null;
   isPhotoVisible: boolean;
+  isStreamVisible: boolean;
   photoScale: number;
   photoX: number;
   photoY: number;
@@ -118,7 +118,7 @@ interface StreamState {
 }
 
 const DEFAULT_TABS: Tab[] = [
-  { id: '1', url: 'https://runbuzzcricket.com/match-score?match=U2FsdGVkX18KBj+l7vPlpDChF+R17SR4bWsBs/3fCxMPqa2t0kOOEeMmSJ5DUd4zVC12tNqySZPkJG2WhBed+cqGlPjmjHZfXC4o1oxd16EabZ2WnzW1XQtkansrLTEJuHj0RYF2052QA/zdq/qc3Muwo9sNxR8Wf7O7yw+ef/Y+vn/bHCLfSYPL7+D83DvnTr25gfpPbOr+edqYqiH6tUhvuR34N/0PF+0DDe1g9NH+8L20UZ6BasS6ILy05IydtwLFSULNifgj5T2tFTY5H1C9662FG5qpF5DbxKPzwkfbnoaF+7OX/+T/M+t9vCQYUbWcqw6KzXUoj904eevdGw==', title: 'Cricket Score', icon: '🏏' },
+  { id: '1', url: '', title: 'Cricket Score', icon: '🏏' },
 ];
 
 export default function App() {
@@ -153,6 +153,7 @@ export default function App() {
     stadiumVolume: 0.5,
     customPhoto: null,
     isPhotoVisible: false,
+    isStreamVisible: true,
     photoScale: 1,
     photoX: 80,
     photoY: 80,
@@ -164,118 +165,9 @@ export default function App() {
   const [speed, setSpeed] = useState<string>('10.0');
   const [showUrlBar, setShowUrlBar] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [presets, setPresets] = useState<StreamPreset[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('stream_presets');
-    if (saved) {
-      try {
-        setPresets(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load presets", e);
-      }
-    }
-  }, []);
-
-  const savePreset = () => {
-    const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
-    const name = prompt("Enter a name for this configuration:", new URL(activeTab.url).hostname) || 'Untitled Layout';
-    
-    const newPreset: StreamPreset = {
-      id: Date.now().toString(),
-      name,
-      url: activeTab.url,
-      cropScale: state.cropScale,
-      cropOffsetX: state.cropOffsetX,
-      cropOffsetY: state.cropOffsetY,
-      webZoom: state.webZoom,
-      rotation: state.rotation,
-      isAspectLocked: state.isAspectLocked,
-      camScale: state.camScale,
-      camX: state.camX,
-      camY: state.camY,
-      isCamVisible: state.isCamVisible,
-      customPhoto: state.customPhoto,
-      isPhotoVisible: state.isPhotoVisible,
-      photoScale: state.photoScale,
-      photoX: state.photoX,
-      photoY: state.photoY,
-      photoCropX: state.photoCropX,
-      photoCropY: state.photoCropY,
-      photoCropScale: state.photoCropScale
-    };
-
-    const updated = [...presets, newPreset];
-    setPresets(updated);
-    localStorage.setItem('stream_presets', JSON.stringify(updated));
-  };
 
   const toggleFullscreen = () => {
     setState(p => ({ ...p, isFullscreen: !p.isFullscreen }));
-  };
-
-  const loadPreset = (preset: StreamPreset) => {
-    setState(p => ({
-      ...p,
-      cropScale: preset.cropScale,
-      cropOffsetX: preset.cropOffsetX,
-      cropOffsetY: preset.cropOffsetY,
-      webZoom: preset.webZoom,
-      rotation: preset.rotation,
-      isAspectLocked: preset.isAspectLocked,
-      camScale: preset.camScale ?? p.camScale,
-      camX: preset.camX ?? p.camX,
-      camY: preset.camY ?? p.camY,
-      isCamVisible: preset.isCamVisible ?? p.isCamVisible,
-      customPhoto: preset.customPhoto ?? p.customPhoto,
-      isPhotoVisible: preset.isPhotoVisible ?? p.isPhotoVisible,
-      photoScale: preset.photoScale ?? p.photoScale,
-      photoX: preset.photoX ?? p.photoX,
-      photoY: preset.photoY ?? p.photoY,
-      photoCropX: preset.photoCropX ?? p.photoCropX,
-      photoCropY: preset.photoCropY ?? p.photoCropY,
-      photoCropScale: preset.photoCropScale ?? p.photoCropScale,
-      tabs: p.tabs.map(t => t.id === p.activeTabId ? { ...t, url: preset.url } : t)
-    }));
-    setShowUrlBar(false);
-  };
-
-  const deletePreset = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = presets.filter(p => p.id !== id);
-    setPresets(updated);
-    localStorage.setItem('stream_presets', JSON.stringify(updated));
-  };
-
-  const exportPresets = () => {
-    const blob = new Blob([JSON.stringify(presets, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `stream-studio-presets-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const importPresets = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target?.result as string);
-        if (Array.isArray(imported)) {
-          const updated = [...presets, ...imported.filter(p => !presets.find(existing => existing.id === (p as any).id))];
-          setPresets(updated);
-          localStorage.setItem('stream_presets', JSON.stringify(updated));
-          alert(`Successfully imported layouts!`);
-        }
-      } catch (err) {
-        alert("Failed to import presets. Invalid file format.");
-      }
-    };
-    reader.readAsText(file);
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -315,7 +207,6 @@ export default function App() {
         case 's':
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            savePreset();
           }
           break;
         case 'c':
@@ -423,7 +314,6 @@ export default function App() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingCam, setIsDraggingCam] = useState(false);
-  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
   const onMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (!state.isCropping || state.isLocked) return;
@@ -440,26 +330,6 @@ export default function App() {
     const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
     dragStart.current = { x: clientX - state.camX, y: clientY - state.camY };
-  };
-
-  const onMouseDownPhoto = (e: React.MouseEvent | React.TouchEvent) => {
-    if (state.isLocked) return;
-    if (e.cancelable) e.preventDefault(); 
-    setIsDraggingPhoto(true);
-    const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
-    dragStart.current = { x: clientX - state.photoX, y: clientY - state.photoY };
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setState(p => ({ ...p, customPhoto: reader.result as string, isPhotoVisible: true }));
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const reloadIframe = () => {
@@ -488,19 +358,12 @@ export default function App() {
         camX: clientX - dragStart.current.x,
         camY: clientY - dragStart.current.y
       }));
-    } else if (isDraggingPhoto) {
-      setState(p => ({
-        ...p,
-        photoX: clientX - dragStart.current.x,
-        photoY: clientY - dragStart.current.y
-      }));
     }
   };
 
   const onMouseUp = () => {
     setIsDragging(false);
     setIsDraggingCam(false);
-    setIsDraggingPhoto(false);
   };
 
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
@@ -629,18 +492,50 @@ export default function App() {
                   transformOrigin: 'center center'
                 }}
               >
-                <iframe 
-                  ref={iframeRef}
-                  src={activeTab.url}
-                  style={{
-                    width: `${100 / state.webZoom}%`,
-                    height: `${100 / state.webZoom}%`,
-                    transform: `scale(${state.webZoom})`,
-                    transformOrigin: '0 0'
-                  }}
-                  className={`border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
-                  title="Stream View"
-                />
+                {state.isStreamVisible && activeTab.url ? (
+                  <iframe 
+                    ref={iframeRef}
+                    src={activeTab.url}
+                    style={{
+                      width: `${100 / state.webZoom}%`,
+                      height: `${100 / state.webZoom}%`,
+                      transform: `scale(${state.webZoom})`,
+                      transformOrigin: '0 0'
+                    }}
+                    className={`border-none transition-all ${state.isLocked ? 'pointer-events-none' : 'pointer-events-auto'}`}
+                    title="Stream View"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-[#0d0e12]/80 backdrop-blur-md text-slate-400 p-8 relative overflow-hidden">
+                    {/* Elegant Dashboard BG lines */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px]" />
+                    
+                    <div className="relative z-10 flex flex-col items-center max-w-sm text-center">
+                      <div className="w-16 h-16 rounded-2xl bg-slate-800/50 border border-white/5 flex items-center justify-center mb-5 shadow-xl">
+                        <Monitor className="w-8 h-8 text-emerald-400/80 animate-pulse" />
+                      </div>
+                      <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Live Screen Off</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-2 max-w-xs leading-relaxed font-sans">
+                        Live website stream is turned off or no URL loaded. Click 'Set Live Link' to paste any link or configure overlay.
+                      </p>
+                      
+                      <div className="mt-5 flex flex-wrap gap-2 justify-center">
+                        <button 
+                          onClick={() => !state.isLocked && setShowUrlBar(true)}
+                          className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                        >
+                          Set Live Link
+                        </button>
+                        <button 
+                          onClick={() => setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
+                          className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                        >
+                          Toggle Camera
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
   
@@ -687,64 +582,7 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Custom Photo Overlay (Broadcaster Identity) */}
-          <AnimatePresence>
-            {state.isPhotoVisible && state.customPhoto && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className={`absolute z-[110] rounded-2xl overflow-hidden border-2 shadow-2xl transition-colors ${
-                  !state.isLocked ? 'border-emerald-500 cursor-move ring-4 ring-emerald-500/10' : 'border-white/10 cursor-default'
-                }`}
-                onMouseDown={onMouseDownPhoto}
-                onTouchStart={onMouseDownPhoto}
-                style={{
-                  width: `${120 * state.photoScale}px`,
-                  height: `${140 * state.photoScale}px`, // Slightly taller for badge feel
-                  left: `${state.photoX}px`,
-                  top: `${state.photoY}px`,
-                  touchAction: 'none',
-                  background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%)'
-                }}
-              >
-                <div className="w-full h-full flex flex-col items-center justify-center overflow-hidden relative">
-                  <div className="flex-1 w-full overflow-hidden flex items-center justify-center bg-black/20 relative">
-                    <motion.img 
-                      src={state.customPhoto} 
-                      alt="Broadcaster" 
-                      className="max-w-none"
-                      style={{
-                        scale: state.photoCropScale,
-                        x: state.photoCropX,
-                        y: state.photoCropY,
-                      }}
-                    />
-                    
-                    {/* Cropping Grid Guide - only visible when configuring (unlocked) */}
-                    {!state.isLocked && (
-                      <div className="absolute inset-0 pointer-events-none border border-emerald-500/30">
-                        <div className="absolute inset-x-0 top-1/3 border-t border-emerald-500/20" />
-                        <div className="absolute inset-x-0 top-2/3 border-t border-emerald-500/20" />
-                        <div className="absolute inset-y-0 left-1/3 border-l border-emerald-500/20" />
-                        <div className="absolute inset-y-0 left-2/3 border-l border-emerald-500/20" />
-                      </div>
-                    )}
-                  </div>
-                  {/* Identity Label */}
-                  <div className="w-full py-1.5 bg-emerald-600 flex items-center justify-center gap-1.5 shrink-0">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white">LIVE</span>
-                  </div>
-                </div>
-                {!state.isLocked && (
-                  <div className="absolute top-2 right-2 p-1 bg-black/40 rounded-md">
-                     <ImageIcon className="w-2.5 h-2.5 text-white/50" />
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Custom Photo Overlay (Broadcaster Identity) removed */}
   
           {/* Static Info Layer (Hidden in Fullscreen) */}
           {!state.isFullscreen && !state.isLocked && (
@@ -846,11 +684,33 @@ export default function App() {
 
               <div className="flex items-center gap-2 mb-6">
                 <button 
+                  type="button"
                   onClick={reloadIframe}
                   className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
                 >
                   <RotateCw className="w-3.5 h-3.5 text-blue-400" />
                   Reload Stream
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setState(p => ({ ...p, isStreamVisible: !p.isStreamVisible }))}
+                  className={`flex-1 py-3 border rounded-2xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                    state.isStreamVisible 
+                      ? 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-600/20' 
+                      : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
+                  }`}
+                >
+                  {state.isStreamVisible ? (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      Stream ON
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Stream OFF
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -1027,138 +887,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Custom Identity Photo */}
-                <div className="border-t border-white/5 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4 text-purple-400" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Apna Photo (Identity Overlay)</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       {state.customPhoto && (
-                         <button 
-                           onClick={() => setState(p => ({ 
-                             ...p, 
-                             photoScale: 1, 
-                             photoX: 80, 
-                             photoY: 80,
-                             photoCropScale: 1,
-                             photoCropX: 0,
-                             photoCropY: 0
-                           }))}
-                           className="p-2 bg-white/5 text-slate-500 rounded-xl hover:bg-white/10 transition-all"
-                           title="Reset Photo Transform"
-                         >
-                           <RotateCw className="w-4 h-4" />
-                         </button>
-                       )}
-                       {state.customPhoto && (
-                         <button 
-                           onClick={() => setState(p => ({ ...p, isPhotoVisible: !p.isPhotoVisible }))}
-                           className={`p-2 rounded-xl transition-all ${
-                             state.isPhotoVisible ? 'bg-purple-600/20 text-purple-400 ring-1 ring-purple-500/50' : 'bg-white/5 text-slate-400'
-                           }`}
-                         >
-                           {state.isPhotoVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                         </button>
-                       )}
-                       <label className="p-2 bg-purple-600/20 text-purple-400 rounded-xl cursor-pointer hover:bg-purple-600/30 transition-all" title="Upload Photo">
-                         <Upload className="w-4 h-4" />
-                         <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                       </label>
-                    </div>
-                  </div>
-                  {state.customPhoto && (
-                    <div className="space-y-4 bg-black/20 p-4 rounded-2xl border border-white/5">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Overlay Size</label>
-                          <div className="flex items-center gap-2">
-                             <input 
-                              type="number" 
-                              value={Math.round(state.photoScale * 100)}
-                              onChange={(e) => setState(p => ({ ...p, photoScale: Math.max(0.1, parseInt(e.target.value) / 100) }))}
-                              className="w-12 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-1 text-slate-300 outline-none focus:border-purple-500/50"
-                            />
-                            <span className="text-[9px] font-mono font-bold text-slate-500">%</span>
-                          </div>
-                        </div>
-                        <input 
-                          type="range" min="0.1" max="4" step="0.01" 
-                          value={state.photoScale}
-                          onChange={(e) => setState(p => ({ ...p, photoScale: parseFloat(e.target.value) }))}
-                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                        />
-                      </div>
 
-                      <div className="space-y-3 pt-2 border-t border-white/5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Cropping Zoom</label>
-                          <div className="flex items-center gap-2">
-                             <input 
-                              type="number" 
-                              value={Math.round(state.photoCropScale * 100)}
-                              onChange={(e) => setState(p => ({ ...p, photoCropScale: Math.max(1, parseInt(e.target.value) / 100) }))}
-                              className="w-12 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-1 text-slate-300 outline-none focus:border-emerald-500/50"
-                            />
-                            <span className="text-[9px] font-mono font-bold text-slate-500">%</span>
-                          </div>
-                        </div>
-                        <input 
-                          type="range" min="1" max="5" step="0.1" 
-                          value={state.photoCropScale}
-                          onChange={(e) => setState(p => ({ ...p, photoCropScale: parseFloat(e.target.value) }))}
-                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 pt-2">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">X Offset</label>
-                            <input 
-                              type="number" 
-                              value={state.photoCropX}
-                              onChange={(e) => setState(p => ({ ...p, photoCropX: parseInt(e.target.value) || 0 }))}
-                              className="w-10 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-0.5 text-slate-300 outline-none"
-                            />
-                          </div>
-                          <input 
-                            type="range" min="-200" max="200" step="1" 
-                            value={state.photoCropX}
-                            onChange={(e) => setState(p => ({ ...p, photoCropX: parseInt(e.target.value) }))}
-                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Y Offset</label>
-                            <input 
-                              type="number" 
-                              value={state.photoCropY}
-                              onChange={(e) => setState(p => ({ ...p, photoCropY: parseInt(e.target.value) || 0 }))}
-                              className="w-10 bg-black/40 border border-white/10 rounded-md text-[9px] font-mono text-center p-0.5 text-slate-300 outline-none"
-                            />
-                          </div>
-                          <input 
-                            type="range" min="-200" max="200" step="1" 
-                            value={state.photoCropY}
-                            onChange={(e) => setState(p => ({ ...p, photoCropY: parseInt(e.target.value) }))}
-                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      <button 
-                        onClick={() => setState(p => ({ ...p, customPhoto: null, isPhotoVisible: false }))}
-                        className="w-full py-2 flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest text-red-500/60 hover:text-red-500 transition-colors border-t border-white/5"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Remove Photo
-                      </button>
-                    </div>
-                  )}
-                </div>
 
                 {/* Face Overlay Configuration */}
                 <div className="border-t border-white/5 pt-6">
@@ -1223,70 +952,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Presets Manager */}
-                <div className="border-t border-white/5 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Save className="w-4 h-4 text-emerald-400" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Saved Presets</p>
-                    </div>
-                    <button 
-                      onClick={savePreset}
-                      className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-emerald-600/30 transition-colors"
-                    >
-                      Save Current
-                    </button>
-                  </div>
 
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1 no-scrollbar">
-                    {presets.length === 0 && (
-                      <div className="bg-white/5 border border-dashed border-white/10 rounded-2xl p-4 text-center">
-                        <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">No presets saved yet</p>
-                      </div>
-                    )}
-                    {presets.map(p => (
-                      <div 
-                        key={p.id}
-                        onClick={() => loadPreset(p)}
-                        className="group relative bg-white/5 border border-white/5 hover:border-blue-500/30 hover:bg-white/10 rounded-2xl p-3 cursor-pointer transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-[11px] font-bold text-white truncate w-32">{p.name}</h4>
-                            <p className="text-[8px] text-slate-500 truncate w-32">{p.url}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <div className="flex flex-col items-end">
-                                <span className="text-[7px] font-mono text-blue-400">Scale: {p.cropScale.toFixed(2)}x</span>
-                                <span className="text-[7px] font-mono text-emerald-400">Zoom: {p.webZoom.toFixed(2)}x</span>
-                             </div>
-                             <button 
-                               onClick={(e) => deletePreset(p.id, e)}
-                               className="p-1.5 bg-red-500/10 text-red-500 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20"
-                             >
-                               <X className="w-3 h-3" />
-                             </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2 mt-4">
-                    <button 
-                      onClick={exportPresets}
-                      className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Export
-                    </button>
-                    <label className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                      <Save className="w-3.5 h-3.5" />
-                      Import
-                      <input type="file" accept=".json" onChange={importPresets} className="hidden" />
-                    </label>
-                  </div>
-                </div>
 
                 {/* Canvas Theme */}
                 <div className="border-t border-white/5 pt-6 text-center">
@@ -1322,17 +988,7 @@ export default function App() {
             exit={{ y: 200, opacity: 0 }}
             className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-6 sm:top-1/2 sm:-translate-y-1/2 z-[500] w-[90vw] sm:w-20 bg-[#1A1B1E]/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-3 flex flex-row sm:flex-col items-center gap-2 sm:gap-4 shadow-2xl overflow-x-auto no-scrollbar"
           >
-             <button 
-               title="Save Current Layout" 
-               onClick={savePreset} 
-               className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-3 group border-emerald-500/30 bg-emerald-500/5 shrink-0"
-             >
-               <Save className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-               <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-400 hidden sm:block">Save Layout</span>
-             </button>
 
-             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
-             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
              <button 
                title="Reset Crop Zoom & Position" 
@@ -1394,27 +1050,7 @@ export default function App() {
              <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
              <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
-             <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
-               <div className="flex flex-col sm:flex-row gap-1">
-                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, p.webZoom + 0.01) }))} className="tool-btn p-1.5"><Plus className="w-3.5 h-3.5 text-emerald-400" /></button>
-                 <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, p.webZoom - 0.01) }))} className="tool-btn p-1.5"><Minus className="w-3.5 h-3.5 text-red-400" /></button>
-               </div>
-               <div className="flex flex-col items-center min-w-[40px]">
-                 <input 
-                   type="number" 
-                   step="0.01"
-                   min="0.1"
-                   max="3"
-                   value={state.webZoom.toFixed(2)} 
-                   onChange={(e) => setState(p => ({ ...p, webZoom: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
-                   className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-emerald-400 font-mono text-center focus:border-emerald-500/50 outline-none"
-                 />
-                 <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter mt-1">Mag</span>
-               </div>
-             </div>
 
-             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
-             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
              <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
                 <button onClick={() => adjustCrop('scale', 0.01)} className="tool-btn"><Plus className="w-4 h-4 text-blue-500" /></button>
@@ -1470,17 +1106,7 @@ export default function App() {
             exit={{ y: 200, opacity: 0 }}
             className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:right-auto sm:left-6 sm:top-1/2 sm:-translate-y-1/2 z-[500] w-[90vw] sm:w-20 bg-[#1A1B1E]/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-3 flex flex-row sm:flex-col items-center gap-2 sm:gap-4 shadow-2xl overflow-x-auto no-scrollbar"
           >
-             <button 
-               title="Save Layout" 
-               onClick={savePreset} 
-               className="tool-btn flex flex-col items-center gap-1 py-1 sm:py-3 border-emerald-500/30 bg-emerald-500/5 shrink-0"
-             >
-               <Save className="w-4 h-4 text-emerald-500" />
-               <span className="text-[7px] font-black uppercase tracking-tighter text-emerald-400 hidden sm:block">Save</span>
-             </button>
 
-             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
-             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
 
              <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-3 shrink-0">
                <button 
