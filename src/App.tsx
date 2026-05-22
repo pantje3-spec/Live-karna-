@@ -1083,6 +1083,44 @@ export default function App() {
                 <button onClick={() => adjustCrop('scale', -0.01)} className="tool-btn"><Minus className="w-4 h-4 text-blue-500" /></button>
               </div>
 
+              <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
+              <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
+
+              <div className="flex flex-row sm:flex-col items-center gap-2 shrink-0">
+                <button onClick={() => setState(p => ({ ...p, webZoom: Math.min(3, parseFloat((p.webZoom + 0.05).toFixed(2))) }))} className="tool-btn">
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                </button>
+
+                <div className="hidden sm:flex h-32 items-center justify-center py-2">
+                  <input 
+                    type="range"
+                    min="0.1"
+                    max="3"
+                    step="0.01"
+                    value={state.webZoom}
+                    onChange={(e) => setState(p => ({ ...p, webZoom: parseFloat(e.target.value) }))}
+                    className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 -rotate-90"
+                  />
+                </div>
+
+                <div className="flex flex-col items-center py-1 min-w-[44px]">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    min="0.1"
+                    max="3"
+                    value={parseFloat(state.webZoom.toFixed(2))} 
+                    onChange={(e) => setState(p => ({ ...p, webZoom: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
+                    className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-emerald-400 font-mono text-center focus:border-emerald-500/50 outline-none"
+                  />
+                  <span className="text-[7px] sm:text-[8px] font-bold text-slate-600 uppercase tracking-tighter mt-1">Mag</span>
+                </div>
+
+                <button onClick={() => setState(p => ({ ...p, webZoom: Math.max(0.1, parseFloat((p.webZoom - 0.05).toFixed(2))) }))} className="tool-btn">
+                  <Minus className="w-4 h-4 text-emerald-400" />
+                </button>
+              </div>
+
              <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
              <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
              
