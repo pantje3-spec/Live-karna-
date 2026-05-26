@@ -5,42 +5,25 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Globe, 
   Maximize, 
-  Minimize, 
-  Zap, 
-  Cpu, 
+  Minimize,
   Lock, 
   Unlock, 
-  Eye, 
-  EyeOff, 
   Settings, 
   ArrowLeft, 
   ArrowRight, 
   RotateCw, 
   Crop,
   Wifi,
-  Sun,
   Layout,
   Plus,
   Minus,
   X,
-  User,
-  Trash2,
-  Camera,
-  Circle,
-  Video,
-  Shield,
-  Activity,
-  Search,
   Monitor,
-  Volume2,
-  Play,
-  Pause,
-  Users,
-  Radio,
-  Image as ImageIcon,
-  Upload
+  Eye,
+  EyeOff,
+  Youtube,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -50,31 +33,6 @@ interface Tab {
   url: string;
   title: string;
   icon: string;
-}
-
-interface StreamPreset {
-  id: string;
-  name: string;
-  url: string;
-  cropScale: number;
-  cropOffsetX: number;
-  cropOffsetY: number;
-  webZoom: number;
-  rotation: number;
-  isAspectLocked: boolean;
-  camScale: number;
-  camX: number;
-  camY: number;
-  isCamVisible: boolean;
-  customPhoto: string | null;
-  isPhotoVisible: boolean;
-  isStreamVisible: boolean;
-  photoScale: number;
-  photoX: number;
-  photoY: number;
-  photoCropX: number;
-  photoCropY: number;
-  photoCropScale: number;
 }
 
 interface StreamState {
@@ -93,87 +51,133 @@ interface StreamState {
   webZoom: number;
   isAspectLocked: boolean;
   rotation: number;
-  camError: string | null;
-  // Face Overlay
-  isCamVisible: boolean;
-  camScale: number;
-  camX: number;
-  camY: number;
-  // Visuals
   canvasBg: string;
-  bgImage: string;
-  isMusicPlaying: boolean;
-  musicVolume: number;
-  isStadiumSoundPlaying: boolean;
-  stadiumVolume: number;
-  customPhoto: string | null;
-  isPhotoVisible: boolean;
   isStreamVisible: boolean;
-  photoScale: number;
-  photoX: number;
-  photoY: number;
-  photoCropX: number;
-  photoCropY: number;
-  photoCropScale: number;
-  musicUrl: string;
 }
 
 const DEFAULT_TABS: Tab[] = [
   { id: '1', url: '', title: 'Cricket Score', icon: '🏏' },
 ];
 
-function getYouTubeId(url: string): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
+const LOCAL_STORAGE_KEY = 'layout_studio_state_v3';
+
+/**
+ * Converts YouTube urls to their embed equivalents so they format perfectly in the iframe.
+ * Support types:
+ * - Direct watch links: www.youtube.com/watch?v=VIDEO_ID
+ * - Shortened links: youtu.be/VIDEO_ID
+ * - YouTube Shorts links: youtube.com/shorts/VIDEO_ID
+ * - YouTube Live links: youtube.com/live/VIDEO_ID
+ * - Channel live stream links: youtube.com/embed/live_stream?channel=CHANNEL_ID
+ */
+function getEmbedUrl(url: string): string {
+  if (!url) return '';
+  let target = url.trim();
+  
+  if (!/^https?:\/\//i.test(target)) {
+    target = 'https://' + target;
+  }
+
+  try {
+    const urlObj = new URL(target);
+    const hostname = urlObj.hostname.toLowerCase();
+
+    if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+      let videoId = '';
+
+      if (hostname.includes('youtu.be')) {
+        videoId = urlObj.pathname.split('/')[1];
+      } else if (urlObj.pathname.includes('/shorts/')) {
+        videoId = urlObj.pathname.split('/shorts/')[1].split('/')[0];
+      } else if (urlObj.pathname.includes('/live/')) {
+        videoId = urlObj.pathname.split('/live/')[1].split('/')[0];
+      } else if (urlObj.pathname.includes('/embed/')) {
+        return target;
+      } else if (urlObj.searchParams.has('v')) {
+        videoId = urlObj.searchParams.get('v') || '';
+      }
+
+      if (videoId) {
+        let embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playlist=${videoId}&loop=1&playsinline=1&controls=1`;
+        
+        const tVal = urlObj.searchParams.get('t') || urlObj.searchParams.get('start');
+        if (tVal) {
+          const seconds = parseInt(tVal);
+          if (!isNaN(seconds)) {
+            embedUrl += `&start=${seconds}`;
+          }
+        }
+        return embedUrl;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse URL for YouTube conversion:', e);
+  }
+
+  return target;
 }
 
 export default function App() {
   // --- State ---
-  const [urlInput, setUrlInput] = useState('');
-  const [state, setState] = useState<StreamState>({
-    activeTabId: '1',
-    tabs: DEFAULT_TABS,
-    isLocked: false,
-    isFocusMode: false,
-    isFullscreen: false,
-    isLowData: false,
-    isLowRam: false,
-    cropScale: 1,
-    cropOffsetX: 0,
-    cropOffsetY: 0,
-    isCropping: false,
-    isSplashed: true,
-    webZoom: 1,
-    isAspectLocked: false,
-    rotation: 0,
-    camError: null,
-    isCamVisible: false,
-    camScale: 1,
-    camX: 50,
-    camY: 50,
-    canvasBg: '#0A0B0D',
-    bgImage: 'https://res.cloudinary.com/dm5spjnjk/image/upload/v1779169345/chennai-new-1710336746475-compressed_dlgwid.jpg',
-    isMusicPlaying: false,
-    musicVolume: 0.5,
-    musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    isStadiumSoundPlaying: false,
-    stadiumVolume: 0.5,
-    customPhoto: null,
-    isPhotoVisible: false,
-    isStreamVisible: true,
-    photoScale: 1,
-    photoX: 80,
-    photoY: 80,
-    photoCropX: 0,
-    photoCropY: 0,
-    photoCropScale: 1
+  const [urlInput, setUrlInput] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const activeTab = parsed.tabs?.find((t: any) => t.id === parsed.activeTabId) || parsed.tabs?.[0];
+        if (activeTab?.url) {
+          return activeTab.url;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading urlInput from localStorage:', e);
+    }
+    return '';
+  });
+
+  const [state, setState] = useState<StreamState>(() => {
+    const defaultState: StreamState = {
+      activeTabId: '1',
+      tabs: DEFAULT_TABS,
+      isLocked: false,
+      isFocusMode: false,
+      isFullscreen: false,
+      isLowData: false,
+      isLowRam: false,
+      cropScale: 1,
+      cropOffsetX: 0,
+      cropOffsetY: 0,
+      isCropping: false,
+      isSplashed: true,
+      webZoom: 1,
+      isAspectLocked: false,
+      rotation: 0,
+      canvasBg: '#0A0B0D',
+      isStreamVisible: true,
+    };
+
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultState,
+          ...parsed,
+          isSplashed: true, // Always show splash on fresh reload/mount
+          isFullscreen: false, // Don't persist fullscreen state for predictable behavior
+        };
+      }
+    } catch (e) {
+      console.error('Error parsing StreamState from localStorage:', e);
+    }
+
+    return defaultState;
   });
 
   const [speed, setSpeed] = useState<string>('10.0');
   const [showUrlBar, setShowUrlBar] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'regular' | 'youtube'>('regular');
+  const [ytChannelInput, setYtChannelInput] = useState('');
 
   const toggleFullscreen = () => {
     setState(p => ({ ...p, isFullscreen: !p.isFullscreen }));
@@ -181,9 +185,6 @@ export default function App() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const stadiumRef = useRef<HTMLAudioElement>(null);
   const dragStart = useRef({ x: 0, y: 0 });
 
   // Keyboard Shortcuts
@@ -195,41 +196,16 @@ export default function App() {
       }
 
       switch (e.key.toLowerCase()) {
-        case ' ': // Space
-          e.preventDefault();
-          setState(p => ({ ...p, isMusicPlaying: !p.isMusicPlaying }));
-          break;
         case 'f':
           toggleFullscreen();
           break;
-        case 'v':
-          if (!state.isLocked) {
-            setState(p => ({ ...p, isCamVisible: !p.isCamVisible }));
-          }
-          break;
         case 'l':
           setState(p => ({ ...p, isLocked: !p.isLocked }));
-          break;
-        case 'm':
-          setState(p => ({ ...p, isStadiumSoundPlaying: !p.isStadiumSoundPlaying }));
-          break;
-        case 's':
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-          }
           break;
         case 'c':
           if (!state.isLocked) {
             setState(p => ({ ...p, isCropping: !p.isCropping }));
           }
-          break;
-        case 'arrowup':
-          e.preventDefault();
-          setState(p => ({ ...p, musicVolume: Math.min(1, p.musicVolume + 0.1) }));
-          break;
-        case 'arrowdown':
-          e.preventDefault();
-          setState(p => ({ ...p, musicVolume: Math.max(0, p.musicVolume - 0.1) }));
           break;
       }
     };
@@ -238,70 +214,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.isLocked, toggleFullscreen]);
 
-  // Background Music
-  const youtubeId = getYouTubeId(state.musicUrl);
-  const isYouTubeMusic = !!youtubeId;
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = state.musicVolume;
-      if (state.isMusicPlaying && !isYouTubeMusic) {
-        audioRef.current.play().catch(() => {
-          console.log("Interaction required for audio");
-          setState(p => ({ ...p, isMusicPlaying: false }));
-        });
-      } else {
-        audioRef.current.pause();
-      }
-    }
-  }, [state.isMusicPlaying, state.musicVolume, isYouTubeMusic, state.musicUrl]);
-
-  // Stadium Sound
-  useEffect(() => {
-    if (stadiumRef.current) {
-      stadiumRef.current.volume = state.stadiumVolume;
-      if (state.isStadiumSoundPlaying) {
-        stadiumRef.current.play().catch(() => {
-          setState(p => ({ ...p, isStadiumSoundPlaying: false }));
-        });
-      } else {
-        stadiumRef.current.pause();
-      }
-    }
-  }, [state.isStadiumSoundPlaying, state.stadiumVolume]);
-  
-  // Camera Stream
-  useEffect(() => {
-    let currentStream: MediaStream | null = null;
-
-    if (state.isCamVisible) {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          currentStream = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-          setState(p => ({ ...p, camError: null }));
-        })
-        .catch(err => {
-          console.error("Camera error:", err);
-          setState(p => ({ 
-            ...p, 
-            camError: err.name === 'NotAllowedError' || err.message?.includes('denied') 
-              ? 'CAMERA_DENIED' 
-              : err.message || 'Unknown camera error',
-            isCamVisible: false 
-          }));
-        });
-    }
-
-    return () => {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [state.isCamVisible]);
-  
   // Splash Screen
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -310,22 +222,53 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Persist state to localStorage on change
+  useEffect(() => {
+    try {
+      const stateToPersist = {
+        activeTabId: state.activeTabId,
+        tabs: state.tabs,
+        isLocked: state.isLocked,
+        isFocusMode: state.isFocusMode,
+        isLowData: state.isLowData,
+        isLowRam: state.isLowRam,
+        cropScale: state.cropScale,
+        cropOffsetX: state.cropOffsetX,
+        cropOffsetY: state.cropOffsetY,
+        isCropping: state.isCropping,
+        webZoom: state.webZoom,
+        isAspectLocked: state.isAspectLocked,
+        rotation: state.rotation,
+        canvasBg: state.canvasBg,
+        isStreamVisible: state.isStreamVisible,
+      };
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToPersist));
+    } catch (e) {
+      console.error('Error writing StreamState to localStorage:', e);
+    }
+  }, [state]);
+
   // Handlers
   const handleNav = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!urlInput) return;
-    let targetUrl = urlInput;
-    if (!targetUrl.startsWith('http')) targetUrl = 'https://' + targetUrl;
+    let targetUrl = urlInput.trim();
+    if (!targetUrl.startsWith('http') && !targetUrl.includes('://')) {
+      targetUrl = 'https://' + targetUrl;
+    }
+    
+    // Convert YouTube URL into embed link
+    const finalUrl = getEmbedUrl(targetUrl);
     
     setState(prev => ({ 
       ...prev, 
-      tabs: prev.tabs.map(t => t.id === prev.activeTabId ? { ...t, url: targetUrl } : t)
+      tabs: prev.tabs.map(t => t.id === prev.activeTabId ? { ...t, url: finalUrl } : t)
     }));
+    setUrlInput(finalUrl);
     setShowUrlBar(false);
   };
 
   const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingCam, setIsDraggingCam] = useState(false);
 
   const onMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (!state.isCropping || state.isLocked) return;
@@ -333,15 +276,6 @@ export default function App() {
     const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
     dragStart.current = { x: clientX - state.cropOffsetX, y: clientY - state.cropOffsetY };
-  };
-
-  const onMouseDownCam = (e: React.MouseEvent | React.TouchEvent) => {
-    if (state.isLocked) return;
-    if (e.cancelable) e.preventDefault(); 
-    setIsDraggingCam(true);
-    const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
-    dragStart.current = { x: clientX - state.camX, y: clientY - state.camY };
   };
 
   const reloadIframe = () => {
@@ -364,18 +298,11 @@ export default function App() {
         cropOffsetX: clientX - dragStart.current.x,
         cropOffsetY: clientY - dragStart.current.y
       }));
-    } else if (isDraggingCam) {
-      setState(p => ({
-        ...p,
-        camX: clientX - dragStart.current.x,
-        camY: clientY - dragStart.current.y
-      }));
     }
   };
 
   const onMouseUp = () => {
     setIsDragging(false);
-    setIsDraggingCam(false);
   };
 
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
@@ -413,36 +340,6 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Stadium Background Overlay */}
-      <div 
-        className="absolute inset-0 z-0 opacity-30 pointer-events-none"
-        style={{ 
-          backgroundImage: `url(${state.bgImage})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: 'brightness(0.5)'
-        }}
-      />
-
-      <audio 
-        ref={audioRef}
-        src={isYouTubeMusic ? undefined : (state.musicUrl || undefined)} 
-        loop
-      />
-      {state.isMusicPlaying && isYouTubeMusic && youtubeId && (
-        <iframe
-          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=0&loop=1&playlist=${youtubeId}&enablejsapi=1`}
-          className="hidden"
-          allow="autoplay"
-          title="Background Music YouTube Player"
-          key={youtubeId}
-        />
-      )}
-      <audio 
-        ref={stadiumRef}
-        src="https://www.soundjay.com/misc/sounds/stadium-crowd-1.mp3" 
-        loop
-      />
 
       {/* Splash Screen */}
       <AnimatePresence>
@@ -455,42 +352,7 @@ export default function App() {
               <Layout className="w-8 h-8 text-white" />
             </div>
             <h1 className="mt-4 text-xl font-bold tracking-tighter text-white">LAYOUT STUDIO</h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">v3.0 PRISM Protocol</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Camera Error Modal */}
-      <AnimatePresence>
-        {state.camError && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[2000] w-full max-w-xs"
-          >
-            <div className="bg-red-500/90 backdrop-blur-xl border border-red-400/50 rounded-2xl p-4 shadow-2xl overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-1 h-full bg-white/40" />
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                  <Shield className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-white/70">Security Alert</h3>
-                  <p className="text-xs font-bold text-white mt-1 leading-tight">
-                    {state.camError === 'CAMERA_DENIED' 
-                      ? "Camera access was denied. Please click the Lock icon in your browser's address bar and 'Allow' camera access." 
-                      : `Camera Error: ${state.camError}`}
-                  </p>
-                  <button 
-                    onClick={() => setState(p => ({ ...p, camError: null }))}
-                    className="mt-3 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest text-white transition-all active:scale-95"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2 font-mono">CORE_STABLE_V3</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -547,17 +409,14 @@ export default function App() {
                         >
                           Set Live Link
                         </button>
-                        <button 
-                          onClick={() => setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
-                          className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/20 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
-                        >
-                          Toggle Camera
-                        </button>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+
+
+
             </div>
   
           {state.isCropping && !state.isLocked && (
@@ -574,34 +433,7 @@ export default function App() {
             <div className="absolute inset-0 z-[70] bg-transparent" />
           )}
   
-          {/* Face Overlay Layer */}
-          <AnimatePresence>
-            {state.isCamVisible && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className={`absolute z-[100] bg-black rounded-full overflow-hidden border-4 border-blue-500 shadow-2xl ${!state.isLocked ? 'cursor-move' : 'cursor-default'}`}
-                onMouseDown={onMouseDownCam}
-                onTouchStart={onMouseDownCam}
-                style={{
-                  width: `${140 * state.camScale}px`,
-                  height: `${140 * state.camScale}px`,
-                  left: `${state.camX}px`, 
-                  top: `${state.camY}px`,
-                  touchAction: 'none'
-                }}
-              >
-                <video 
-                  ref={videoRef}
-                  autoPlay 
-                  playsInline 
-                  muted 
-                  className="w-full h-full object-cover -scale-x-100"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+
 
           {/* Custom Photo Overlay (Broadcaster Identity) removed */}
   
@@ -623,7 +455,7 @@ export default function App() {
           )}
         </main>
 
-      {/* --- Controls Footer (The 4 Main Buttons) --- */}
+      {/* --- Controls Footer (The Main Buttons) --- */}
       <AnimatePresence>
         {!state.isFullscreen && (
           <motion.footer 
@@ -644,14 +476,6 @@ export default function App() {
               onClick={() => !state.isLocked && setState(p => ({ ...p, isCropping: !p.isCropping }))}
               active={state.isCropping}
               variant="blue"
-              disabled={state.isLocked}
-            />
-            <FooterButton 
-              icon={<User className="w-5 h-5" />} 
-              label="Face Overlay" 
-              onClick={() => !state.isLocked && setState(p => ({ ...p, isCamVisible: !p.isCamVisible }))}
-              active={state.isCamVisible}
-              variant={state.isCamVisible ? 'blue' : 'default'}
               disabled={state.isLocked}
             />
             <FooterButton 
@@ -703,364 +527,192 @@ export default function App() {
                 <button onClick={() => setShowUrlBar(false)} className="p-2 hover:bg-white/5 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
               </div>
 
-              <div className="flex items-center gap-2 mb-6">
+              {/* Minimalist Unified Control Actions Grid */}
+              <div className="grid grid-cols-3 gap-2 mb-6">
                 <button 
                   type="button"
                   onClick={reloadIframe}
-                  className="flex-1 py-3 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  className="py-3 px-1 hover:border-white/10 border border-white/5 bg-white/[0.02] hover:bg-white/[0.06] rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all flex flex-col items-center justify-center gap-1.5 active:scale-95"
+                  title="Reload Live stream iframe"
                 >
-                  <RotateCw className="w-3.5 h-3.5 text-blue-400" />
-                  Reload Stream
+                  <RotateCw className="w-4 h-4 text-blue-400" />
+                  Reload
                 </button>
                 <button 
                   type="button"
                   onClick={() => setState(p => ({ ...p, isStreamVisible: !p.isStreamVisible }))}
-                  className={`flex-1 py-3 border rounded-2xl text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  className={`py-3 px-1 border rounded-2xl text-[9px] font-bold uppercase tracking-widest transition-all flex flex-col items-center justify-center gap-1.5 active:scale-95 ${
                     state.isStreamVisible 
-                      ? 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-600/20' 
-                      : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
+                      ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300' 
+                      : 'bg-red-500/5 border-red-500/10 text-red-400 hover:bg-red-500/10 hover:text-red-300'
                   }`}
+                  title="Toggle Stream visibility"
                 >
                   {state.isStreamVisible ? (
                     <>
-                      <Eye className="w-3.5 h-3.5" />
-                      Stream ON
+                      <Eye className="w-4 h-4" />
+                      Visible
                     </>
                   ) : (
                     <>
-                      <EyeOff className="w-3.5 h-3.5" />
-                      Stream OFF
+                      <EyeOff className="w-4 h-4" />
+                      Hidden
                     </>
                   )}
                 </button>
+                <button 
+                  type="button"
+                  onClick={() => setState(p => ({ 
+                    ...p, 
+                    cropScale: 1, 
+                    cropOffsetX: 0, 
+                    cropOffsetY: 0, 
+                    webZoom: 1,
+                    isAspectLocked: false,
+                    rotation: 0
+                  }))}
+                  className="py-3 px-1 hover:border-white/10 border border-white/5 bg-white/[0.02] hover:bg-white/[0.06] rounded-2xl text-[9px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all flex flex-col items-center justify-center gap-1.5 active:scale-95"
+                  title="Reset Crop, zoom, and orientation transforms"
+                >
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  Reset View
+                </button>
               </div>
 
-              <form onSubmit={handleNav} className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Stream URL</label>
-                  <input 
-                    type="text" 
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500/40"
-                    placeholder="Enter website link..."
-                    autoFocus
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-white shadow-xl shadow-blue-900/40 transition-all active:scale-95"
+              {/* Sleek Modal Tab Swapper */}
+              <div className="flex bg-black/40 p-1 rounded-xl mb-5 border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setModalTab('regular')}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
+                    modalTab === 'regular' 
+                      ? 'bg-white/10 text-white shadow' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  Apply & Load
+                  🌐 Regular / Web Link
                 </button>
-              </form>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('youtube')}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${
+                    modalTab === 'youtube' 
+                      ? 'bg-red-500/15 text-red-400 border border-red-500/10 shadow' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🔴 YouTube Live
+                </button>
+              </div>
+
+              {modalTab === 'regular' ? (
+                <form onSubmit={handleNav} className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Stream URL</label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        className="w-full bg-black/40 border border-white/5 rounded-xl pl-4 pr-10 py-3 text-sm text-white outline-none focus:border-blue-500/40"
+                        placeholder="Enter website, live score, or YT link..."
+                        autoFocus
+                      />
+                      {(urlInput.includes('youtube.com') || urlInput.includes('youtu.be')) && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/20" title="YouTube stream detected: auto-converting to live embed player!">
+                          <Youtube className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[9px] text-slate-500 mt-1.5 block leading-normal font-mono">
+                      💡 YouTube links auto-convert into full live window modes!
+                    </span>
+                  </div>
+                  <button 
+                    type="submit" 
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-white shadow-xl shadow-blue-900/40 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-200" />
+                    Apply & Load Live Link
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">YouTube Channel ID / URL</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={ytChannelInput}
+                        onChange={(e) => setYtChannelInput(e.target.value)}
+                        placeholder="Enter Channel ID (e.g. UC3XTzVzaHQEd30rGs0Lco8g)"
+                        className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-red-500/40"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (!ytChannelInput.trim()) return;
+                          
+                          let processedId = ytChannelInput.trim();
+                          
+                          // Convert channel page URL format to absolute Channel ID if they pasted a link
+                          if (processedId.includes('youtube.com/channel/')) {
+                            processedId = processedId.split('youtube.com/channel/')[1].split('/')[0].split('?')[0];
+                          } else if (processedId.startsWith('UC') === false && processedId.includes('/')) {
+                            // Try parsing if pasted some other path
+                            const parts = processedId.split('/');
+                            const lastPart = parts[parts.length - 1];
+                            if (lastPart.startsWith('UC')) {
+                              processedId = lastPart;
+                            }
+                          }
+                          
+                          const liveUrl = `https://www.youtube.com/embed/live_stream?channel=${processedId}&autoplay=1&mute=1`;
+                          setUrlInput(liveUrl);
+                          setState(prev => ({ 
+                            ...prev, 
+                            tabs: prev.tabs.map(t => t.id === prev.activeTabId ? { ...t, url: liveUrl } : t)
+                          }));
+                          setShowUrlBar(false);
+                        }}
+                        className="py-3 px-4 bg-red-650 hover:bg-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest text-white transition-all active:scale-95 duration-200 whitespace-nowrap"
+                      >
+                        Connect Stream
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/30 rounded-2xl p-4 border border-white/5 space-y-2 text-slate-400 text-[10px] leading-relaxed">
+                    <div className="font-bold text-slate-300 flex items-center gap-1.5">
+                      <Youtube className="w-4 h-4 text-red-500" />
+                      <span>Requirements / Kya aur chahiye?</span>
+                    </div>
+                    
+                    <p className="text-[9px] text-slate-400 leading-normal">
+                      Continuous active stream ke liye aapko channel ki <strong className="text-red-400">Channel ID</strong> deni hogi (starts with <code className="bg-white/5 px-1 py-0.5 rounded text-white font-mono">UC...</code>).
+                    </p>
+
+                    <div className="space-y-1 pt-1.5 text-[9px] border-t border-white/5">
+                      <span className="font-bold text-slate-300 block">🔍 Channel ID kaise nikalein?</span>
+                      <ol className="list-decimal pl-4 space-y-1">
+                        <li>Apne favorite channel ke live video par jaayein.</li>
+                        <li>Unke channel link ya handle name par click karke channel profile page kholein.</li>
+                        <li>Wahan key <strong className="text-white">"Share" ➔ "Copy channel ID"</strong> par click karein.</li>
+                        <li>Ya direct online free platforms (jaise <code className="text-white font-mono">commentpicker.com</code>) par channel name daalkar click karein!</li>
+                      </ol>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/5 text-[9px] text-emerald-400 flex items-center gap-1 font-mono">
+                      <span>✨ <strong>Wahi kyu?:</strong> Channel-id continuous streams ko stream change hone par link expire hone se bachati hai!</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-6 space-y-6">
-                {/* Background Music */}
-                <div className="border-t border-white/5 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-blue-400" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Background Music</p>
-                    </div>
-                    <button 
-                      onClick={() => setState(p => ({ ...p, isMusicPlaying: !p.isMusicPlaying }))}
-                      className={`p-2 rounded-xl transition-all ${
-                        state.isMusicPlaying ? 'bg-emerald-600/20 text-emerald-400 ring-1 ring-emerald-500/50' : 'bg-white/5 text-slate-400'
-                      }`}
-                    >
-                      {state.isMusicPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-3 bg-black/40 p-3 rounded-2xl border border-white/5 mb-4">
-                    <Volume2 className="w-3.5 h-3.5 text-slate-600" />
-                    <input 
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={state.musicVolume}
-                      onChange={(e) => setState(p => ({ ...p, musicVolume: parseFloat(e.target.value) }))}
-                      className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    <span className="text-[10px] font-mono font-bold text-slate-500 w-8">{Math.round(state.musicVolume * 100)}%</span>
-                  </div>
-
-                  {/* Preset Music Quick Selection */}
-                  <div className="space-y-2 mb-4">
-                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Quick Tracks</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        type="button"
-                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', isMusicPlaying: true }))}
-                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
-                          state.musicUrl === 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' 
-                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
-                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="truncate font-bold">🎵 Classic Sports</div>
-                        <div className="text-[8px] opacity-60">Direct MP3</div>
-                      </button>
-
-                      <button 
-                        type="button"
-                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', isMusicPlaying: true }))}
-                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
-                          state.musicUrl === 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3' 
-                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
-                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="truncate font-bold">🏏 Stadium Hype</div>
-                        <div className="text-[8px] opacity-60">Direct MP3</div>
-                      </button>
-
-                      <button 
-                        type="button"
-                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', isMusicPlaying: true }))}
-                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
-                          state.musicUrl === 'https://www.youtube.com/watch?v=jfKfPfyJRdk' 
-                            ? 'bg-emerald-600/10 border-emerald-500/40 text-emerald-400' 
-                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="truncate font-bold">🏮 Lofi Chill Live</div>
-                        <div className="text-[8px] opacity-60">YouTube Stream</div>
-                      </button>
-
-                      <button 
-                        type="button"
-                        onClick={() => setState(p => ({ ...p, musicUrl: 'https://www.youtube.com/watch?v=5qmYV7P9Zco', isMusicPlaying: true }))}
-                        className={`text-left p-2.5 rounded-xl border text-[10px] font-medium transition-all ${
-                          state.musicUrl === 'https://www.youtube.com/watch?v=5qmYV7P9Zco' 
-                            ? 'bg-emerald-600/10 border-emerald-500/40 text-emerald-400' 
-                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className="truncate font-bold">⚡ Gaming Synth</div>
-                        <div className="text-[8px] opacity-60">YouTube Mix</div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Custom URL Input */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block w-full truncate">Custom link (YouTube / MP3)</label>
-                      <div className="shrink-0">
-                        {isYouTubeMusic ? (
-                          <span className="text-[8px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold">YOUTUBE MODE</span>
-                        ) : (
-                          <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded font-mono font-bold">MP3 MODE</span>
-                        )}
-                      </div>
-                    </div>
-                    <input 
-                      type="text"
-                      value={state.musicUrl}
-                      onChange={(e) => setState(p => ({ ...p, musicUrl: e.target.value }))}
-                      placeholder="Paste YouTube video link or direct MP3 stream URL..."
-                      className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-blue-500/40"
-                    />
-                    <p className="text-[8px] text-slate-500 leading-normal">
-                      🎵 Paste any standard MP3 audio link or paste any YouTube live stream / music video link to play it dynamically in the background during live session overlays.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Stadium & Atmosphere */}
-                <div className="border-t border-white/5 pt-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Radio className="w-4 h-4 text-emerald-400" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Live Atmosphere</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Continuous Ambience */}
-                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="text-[9px] font-bold text-slate-300">Continuous Crowd</span>
-                        </div>
-                        <button 
-                          onClick={() => setState(p => ({ ...p, isStadiumSoundPlaying: !p.isStadiumSoundPlaying }))}
-                          className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
-                            state.isStadiumSoundPlaying ? 'bg-emerald-600/20 text-emerald-400 ring-1 ring-emerald-500/30' : 'bg-white/5 text-slate-500'
-                          }`}
-                        >
-                          {state.isStadiumSoundPlaying ? 'Live Now' : 'Go Live'}
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Volume2 className="w-3 h-3 text-slate-600" />
-                        <input 
-                          type="range" min="0" max="1" step="0.01" 
-                          value={state.stadiumVolume}
-                          onChange={(e) => setState(p => ({ ...p, stadiumVolume: parseFloat(e.target.value) }))}
-                          className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                        />
-                        <span className="text-[9px] font-mono text-slate-500 w-6">{Math.round(state.stadiumVolume * 100)}</span>
-                      </div>
-                    </div>
-
-                    {/* Sound Library Grid */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.zapsplat.com/wp-content/uploads/2015/sound-effects-one/sports_stadium_crowd_cheer_applause_whistle.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">🏏</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-400 z-10">Chakka / 6</span>
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.soundjay.com/human/sounds/applause-01.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-orange-600/10 hover:bg-orange-600/20 border border-orange-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">👏</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-orange-400 z-10">Choka / 4</span>
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.soundjay.com/human/sounds/ooooh-01.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-red-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">☝️</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-red-400 z-10">Out / Wicket</span>
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.soundjay.com/misc/sounds/wood-crack-1.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">💥</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 z-10">Bat Hit</span>
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                       <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.soundjay.com/misc/sounds/stadium-crowd-1.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">🏟️</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 z-10">Crowd Roar</span>
-                      </button>
-
-                      <button 
-                        onClick={() => {
-                          const audio = new Audio('https://www.soundjay.com/misc/sounds/small-bell-ring-01a.mp3');
-                          audio.volume = state.stadiumVolume;
-                          audio.play();
-                        }}
-                        className="bg-slate-600/10 hover:bg-slate-600/20 border border-slate-500/20 p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute inset-0 bg-slate-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-xl group-active:scale-125 transition-transform z-10">🔔</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 z-10">Umpire Bell</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-
-
-                {/* Face Overlay Configuration */}
-                <div className="border-t border-white/5 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Camera className="w-4 h-4 text-blue-400" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Face Overlay (Camera)</p>
-                    </div>
-                    {state.isCamVisible && (
-                      <button 
-                        onClick={() => setState(p => ({ ...p, camScale: 1, camX: 50, camY: 50 }))}
-                        className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 transition-colors flex items-center gap-1.5"
-                        title="Reset Camera"
-                      >
-                         <span className="text-[8px] font-bold uppercase">Reset</span>
-                         <RotateCw className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-4 bg-black/20 p-4 rounded-2xl border border-white/5">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Camera Size (Scale)</label>
-                        <span className="text-[9px] font-mono font-bold text-slate-400">{Math.round(state.camScale * 100)}%</span>
-                      </div>
-                      <input 
-                        type="range" min="0.1" max="4" step="0.01" 
-                        value={state.camScale}
-                        onChange={(e) => setState(p => ({ ...p, camScale: parseFloat(e.target.value) }))}
-                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                    </div>
-                    <p className="text-[8px] text-slate-600 font-medium">Tip: Drag the camera bubble on the main screen to move it.</p>
-                  </div>
-                </div>
-
-                {/* Reset Section */}
-                <div className="border-t border-white/5 pt-6">
-                  <button 
-                    onClick={() => setState(p => ({ 
-                      ...p, 
-                      cropScale: 1, 
-                      cropOffsetX: 0, 
-                      cropOffsetY: 0, 
-                      webZoom: 1,
-                      isAspectLocked: false,
-                      rotation: 0,
-                      camScale: 1,
-                      camX: 50,
-                      camY: 50,
-                      photoScale: 0.8,
-                      photoX: 40,
-                      photoY: 400,
-                      photoCropScale: 1.2,
-                      photoCropX: 0,
-                      photoCropY: 0
-                    }))}
-                    className="w-full py-4 border border-white/5 hover:bg-emerald-600/10 hover:text-emerald-400 hover:border-emerald-500/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest text-slate-400 transition-all flex items-center justify-center gap-2"
-                  >
-                    <RotateCw className="w-4 h-4" />
-                    Reset All View Transforms
-                  </button>
-                </div>
-
-
-
                 {/* Canvas Theme */}
                 <div className="border-t border-white/5 pt-6 text-center">
-                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Studio Theme</p>
+                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-3">Studio Theme</p>
                    <div className="flex justify-center gap-3">
                      {[
                        { color: '#0A0B0D', name: 'Dark' },
@@ -1073,6 +725,7 @@ export default function App() {
                          onClick={() => setState(p => ({ ...p, canvasBg: theme.color }))}
                          className={`w-10 h-10 rounded-2xl border-2 transition-all ${state.canvasBg === theme.color ? 'border-blue-500 scale-110 shadow-lg shadow-blue-500/20' : 'border-white/5'}`}
                          style={{ backgroundColor: theme.color }}
+                         type="button"
                          title={theme.name}
                        />
                      ))}
@@ -1239,94 +892,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Face Overlay Tool Panel (Floating) */}
-      <AnimatePresence>
-        {state.isCamVisible && !state.isLocked && !state.isFullscreen && !state.isCropping && (
-          <motion.div 
-            initial={{ y: 200, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 200, opacity: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:right-auto sm:left-6 sm:top-1/2 sm:-translate-y-1/2 z-[500] w-[90vw] sm:w-20 bg-[#1A1B1E]/95 backdrop-blur-3xl border border-white/10 rounded-3xl p-3 flex flex-row sm:flex-col items-center gap-2 sm:gap-4 shadow-2xl overflow-x-auto no-scrollbar"
-          >
 
-
-             <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-3 shrink-0">
-               <button 
-                 onClick={() => setState(p => ({ ...p, camScale: Math.min(3, parseFloat((p.camScale + 0.01).toFixed(2))) }))} 
-                 className="tool-btn"
-               >
-                 <Plus className="w-4 h-4 text-emerald-500" />
-               </button>
-
-               <div className="hidden sm:flex h-32 items-center justify-center py-4">
-                 <input 
-                   type="range"
-                   min="0.1"
-                   max="3"
-                   step="0.01"
-                   value={state.camScale}
-                   onChange={(e) => setState(p => ({ ...p, camScale: parseFloat(e.target.value) }))}
-                   className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 -rotate-90"
-                 />
-               </div>
-
-               <button 
-                 onClick={() => setState(p => ({ ...p, camScale: Math.max(0.1, parseFloat((p.camScale - 0.01).toFixed(2))) }))} 
-                 className="tool-btn"
-               >
-                 <Minus className="w-4 h-4 text-red-500" />
-               </button>
-             </div>
-
-             <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0" />
-             <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0" />
-
-             <div className="flex flex-row sm:flex-col items-center gap-2 sm:gap-1 shrink-0">
-               <div className="flex flex-col items-center min-w-[44px]">
-                 <input 
-                   type="number" 
-                   step="0.01"
-                   min="0.1"
-                   max="3"
-                   value={state.camScale.toFixed(2)} 
-                   onChange={(e) => setState(p => ({ ...p, camScale: Math.max(0.1, Math.min(3, parseFloat(e.target.value) || 1)) }))}
-                   className="w-10 sm:w-12 bg-white/10 border border-white/20 rounded px-1 py-1 text-[10px] sm:text-[8px] text-blue-400 font-mono text-center focus:border-blue-500/50 outline-none"
-                 />
-                 <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 mt-1">Size</span>
-               </div>
-               
-               <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0 mx-1" />
-
-               <div className="flex flex-col sm:flex-row gap-1 shrink-0">
-                 <input 
-                   type="number"
-                   value={state.camX.toFixed(0)}
-                   onChange={(e) => setState(p => ({ ...p, camX: parseInt(e.target.value) || 0 }))}
-                   className="w-10 sm:w-8 bg-white/10 border border-white/20 rounded px-1 py-1 text-[9px] sm:text-[7px] text-slate-400 font-mono text-center outline-none"
-                   title="Cam X"
-                 />
-                 <input 
-                   type="number"
-                   value={state.camY.toFixed(0)}
-                   onChange={(e) => setState(p => ({ ...p, camY: parseInt(e.target.value) || 0 }))}
-                   className="w-10 sm:w-8 bg-white/10 border border-white/20 rounded px-1 py-1 text-[9px] sm:text-[7px] text-slate-400 font-mono text-center outline-none"
-                   title="Cam Y"
-                 />
-               </div>
-
-               <div className="hidden sm:block h-px w-8 bg-white/10 shrink-0 my-2" />
-               <div className="block sm:hidden w-px h-8 bg-white/10 shrink-0 mx-1" />
-
-               <button 
-                 onClick={() => setState(p => ({ ...p, camX: 50, camY: 50, camScale: 1 }))} 
-                 className="tool-btn shrink-0"
-               >
-                 <RotateCw className="w-4 h-4 text-slate-500" />
-               </button>
-             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <style dangerouslySetInnerHTML={{ __html: `
         .tool-btn {
